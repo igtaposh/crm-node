@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS cab_service_details (
     voucher_number VARCHAR(50) NOT NULL,
     confirmation_number VARCHAR(100),
     issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- document_id UUID REFERENCES documents(id),
+    document_id UUID REFERENCES documents(id),
     status status_type NOT NULL DEFAULT 'issued'
 );
 

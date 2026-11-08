@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS payment_allocations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
-    -- invoive_id UUID REFERENCES invoices(id) ON DELETE CASCADE,
+    invoive_id UUID REFERENCES invoices(id) ON DELETE CASCADE,
     allocation_amount DECIMAL(18,2) NOT NULL,
     allocated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS supplier_payment_allocations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     supplier_payment_id UUID NOT NULL REFERENCES supplier_payments(id) ON DELETE CASCADE,
-    -- vendor_bill_id UUID NOT NULL REFERENCES vendor_bills(id) ON DELETE CASCADE,
+    vendor_bill_id UUID NOT NULL REFERENCES vendor_bills(id) ON DELETE CASCADE,
     allocated_amount DECIMAL(18,2) NOT NULL,
 
     CONSTRAINT valid_allocated_amount CHECK (allocated_amount >= 0)

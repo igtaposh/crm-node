@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS tour_packages (
     description TEXT,
     inclusions JSONB NOT NULL,
     exclusions JSONB NOT NULL,
-   --  cancelation_policy_id UUID REFERENCES cancelation_policy(id),
+    cancelation_policy_id UUID REFERENCES cancelation_policy(id),
     status tour_pkgs_status_type NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
