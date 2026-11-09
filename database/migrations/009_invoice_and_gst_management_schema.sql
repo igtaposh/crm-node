@@ -119,6 +119,8 @@ CREATE TABLE IF NOT EXISTS vendor_bills (
     CONSTRAINT valid_total_amount CHECK (total_amount >= 0)
 );
 
+ALTER TABLE supplier_payment_allocations ADD CONSTRAINT fk_vendor_bill_id FOREIGN KEY (vendor_bill_id) REFERENCES vendor_bills(id) ON DELETE CASCADE;
+
 CREATE TABLE IF NOT EXISTS credit_notes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

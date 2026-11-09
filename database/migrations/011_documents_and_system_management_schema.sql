@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE cab_service_details ADD CONSTRAINT fk_document_id FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
+
 CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -64,3 +66,4 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     ip_address INET,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+

@@ -79,7 +79,7 @@ $$;
 
 DO $$
 BEGIN
-    CREATE TYPE status_type AS ENUM (
+    CREATE TYPE cab_service_status_type AS ENUM (
         'draft',
         'issued',
         'cancelled'
@@ -177,12 +177,13 @@ CREATE TABLE IF NOT EXISTS cab_service_details (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     booking_service_id UUID NOT NULL REFERENCES booking_services(id) ON DELETE CASCADE,
     booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+    document_id UUID NOT NULL,
     voucher_number VARCHAR(50) NOT NULL,
     confirmation_number VARCHAR(100),
     issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    document_id UUID REFERENCES documents(id),
-    status status_type NOT NULL DEFAULT 'issued'
+    status cab_service_status_type NOT NULL DEFAULT 'issued'
 );
+
 
 
 CREATE TABLE IF NOT EXISTS service_voucher (

@@ -33,6 +33,16 @@ EXCEPTION
 END
 $$;
 
+
+CREATE TABLE IF NOT EXISTS cancellation_policies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name VARCHAR(150) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT 'true'
+);
+
+
 CREATE TABLE IF NOT EXISTS destinations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -59,7 +69,7 @@ CREATE TABLE IF NOT EXISTS tour_packages (
     description TEXT,
     inclusions JSONB NOT NULL,
     exclusions JSONB NOT NULL,
-    cancelation_policy_id UUID REFERENCES cancelation_policy(id),
+    cancellation_policy_id UUID REFERENCES cancellation_policies(id),
     status tour_pkgs_status_type NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -93,13 +103,7 @@ CREATE TABLE IF NOT EXISTS package_itinerary_days (
     CONSTRAINT valid_distance_km CHECK (distance_km >= 0)
 );
 
-CREATE TABLE IF NOT EXISTS cancellation_policies (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    name VARCHAR(150) NOT NULL,
-    description TEXT,
-    is_active BOOLEAN NOT NULL DEFAULT 'true'
-);
+
 
 CREATE TABLE IF NOT EXISTS cancellation_policy_rules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
