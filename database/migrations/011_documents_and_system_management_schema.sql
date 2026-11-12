@@ -41,7 +41,21 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE cab_service_details ADD CONSTRAINT fk_document_id FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_document_id'
+          AND conrelid = 'cab_service_details'::regclass
+    ) THEN
+        ALTER TABLE cab_service_details
+        ADD CONSTRAINT fk_document_id
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE;
+    END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   

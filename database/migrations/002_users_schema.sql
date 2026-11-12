@@ -36,8 +36,9 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS check_user_email (
     user_id UUID REFERENCES users(id) NOT NULL,
-    is_varified BOOLEAN NOT NULL DEFAULT false
+    is_verified BOOLEAN NOT NULL DEFAULT false
 );
+
 CREATE TABLE IF NOT EXISTS user_otp (
     user_id UUID REFERENCES users(id) NOT NULL,
     otp VARCHAR(6) NOT NULL,

@@ -119,7 +119,20 @@ CREATE TABLE IF NOT EXISTS vendor_bills (
     CONSTRAINT valid_total_amount CHECK (total_amount >= 0)
 );
 
-ALTER TABLE supplier_payment_allocations ADD CONSTRAINT fk_vendor_bill_id FOREIGN KEY (vendor_bill_id) REFERENCES vendor_bills(id) ON DELETE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_vendor_bill_id'
+          AND conrelid = 'supplier_payment_allocations'::regclass
+    ) THEN
+        ALTER TABLE supplier_payment_allocations
+        ADD CONSTRAINT fk_vendor_bill_id
+        FOREIGN KEY (vendor_bill_id) REFERENCES vendor_bills(id) ON DELETE CASCADE;
+    END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS credit_notes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
