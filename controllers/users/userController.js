@@ -4,9 +4,8 @@ import { randomInt } from "node:crypto";
 import { sent_otp_for_email_verify } from "../../utils/sent_otp_for_email_verify.js";
 import jwt from "jsonwebtoken";
 
-export const createUser = async (req, res) => {
+export const create_user = async (req, res) => {
   const {
-    organization_id,
     branch_id,
     name,
     email,
@@ -14,10 +13,9 @@ export const createUser = async (req, res) => {
     password_hash,
     employee_code,
     designation,
-    status,
+    role_id,
   } = req.body;
-
-  const statusValue = status ?? "inactive";
+  const organization_id = req.user;
 
   try {
     if (!organization_id || !name || !email || !password_hash || !role_id) {
@@ -139,23 +137,13 @@ export const createUser = async (req, res) => {
     });
   }
 };
-export const createAdminUser = async (req, res) => {
-  const {
-    organization_id,
-    branch_id,
-    name,
-    email,
-    phone,
-    password_hash,
-    employee_code,
-    designation,
-    status,
-  } = req.body;
-
-  const statusValue = status ?? "active";
+export const create_admin_user = async (req, res) => {
+  const { name, email, phone, password_hash, employee_code, designation } =
+    req.body;
+  const { organization_id } = req.params;
 
   try {
-    if (!organization_id || !name || !email || !password_hash || !role_id) {
+    if (!organization_id || !name || !email || !password_hash) {
       return res.status(400).json({
         success: false,
         message: "Please provide all required fields.",
@@ -171,18 +159,6 @@ export const createAdminUser = async (req, res) => {
         success: false,
         message: "Invalid organization ID.",
       });
-    }
-    if (branch_id) {
-      if (
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-          branch_id,
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid branch ID.",
-        });
-      }
     }
 
     if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
@@ -208,22 +184,18 @@ export const createAdminUser = async (req, res) => {
       });
     }
 
-    const existing = await pool.query(
-      `SELECT id FROM users WHERE email = $1 AND organization_id = $2`,
-      [email, organization_id],
-    );
+    const existing = await pool.query(`SELECT id FROM users WHERE email = $1`, [
+      email,
+    ]);
 
-    if (existing.rows.length > 0) {
+    if (existing.rows.length !== 0) {
       return res.status(400).json({
         success: false,
         message: "Email ID is already in use, Please use an different Email.",
       });
     }
-
-    const hashed_password = await bcrypt.hash(
-      password_hash,
-      parseInt(process.env.SALT_ROUNDS),
-    );
+    const salt_rounds = Number(process.env.SALT_ROUNDS);
+    const hashed_password = await bcrypt.hash(password_hash, salt_rounds);
 
     const result = await pool.query(
       `INSERT INTO users
@@ -232,69 +204,55 @@ export const createAdminUser = async (req, res) => {
         RETURNING *`,
       [
         organization_id,
-        branch_id,
         name,
         email,
         phone,
         hashed_password,
         employee_code,
         designation,
-        statusValue,
       ],
     );
 
-    await pool.query(
-      `INSERT INTO check_user_email
-        (user_id, is_verified)
-        VALUES ($1, $2)
-        RETURNING *`,
-      [result.rows[0].id, true],
-    );
-    const roleResult = await pool.query(
-      `INSERT INTO roles
-        (organization_id, name)
-        VALUES ($1, $2)
-        RETURNING *`,
-      [organization_id, "admin"],
-    );
-    await pool.query(
-      `INSERT INTO user_role
-        (user_id, role_id)
-        VALUES ($1, $2)
-        RETURNING *`,
-      [result.rows[0].id, roleResult.rows[0].id],
-    );
-    const modules = ["crm", "finance", "bookings", "etc"];
+    if (result.rowCount !== 0) {
+      await pool.query(
+        `INSERT INTO check_user_email (user_id, is_verified) VALUES ($1, $2) RETURNING *`,
+        [result.rows[0].id, true],
+      );
+      const roleResult = await pool.query(
+        `INSERT INTO roles (organization_id, name) VALUES ($1, $2) RETURNING *`,
+        [organization_id, "admin"],
+      );
+      await pool.query(
+        `INSERT INTO user_role (user_id, role_id) VALUES ($1, $2) RETURNING *`,
+        [result.rows[0].id, roleResult.rows[0].id],
+      );
 
-    const actions = ["create", "read", "update", "delete", "approve", "post"];
+      const modules = ["crm", "finance", "bookings", "etc"];
 
-    const values = [];
-    const placeholders = [];
+      const actions = ["create", "read", "update", "delete", "approve", "post"];
 
-    let index = 1;
+      const values = [];
+      const placeholders = [];
 
-    for (const module of modules) {
-      for (const action of actions) {
-        placeholders.push(`($${index++}, $${index++}, $${index++})`);
+      let index = 1;
 
-        values.push(module, action, `${action} permission for ${module}`);
+      for (const module of modules) {
+        for (const action of actions) {
+          placeholders.push(`($${index++}, $${index++}, $${index++})`);
+
+          values.push(module, action, `${action} permission for ${module}`);
+        }
       }
-    }
 
-    const permissionResult = await pool.query(
-      `INSERT INTO permissions (module, action, description)
-   VALUES ${placeholders.join(", ")}
-   ON CONFLICT (module, action) DO NOTHING
-   RETURNING *`,
-      values,
-    );
-    await pool.query(
-      `INSERT INTO role_permissions
-        (role_id, permissions_id)
-        VALUES ($1, $2)
-        RETURNING *`,
-      [roleResult.rows[0].id, permissionResult.rows[0].id],
-    );
+      const permissionResult = await pool.query(
+        `INSERT INTO permissions (module, action, description) VALUES ${placeholders.join(", ")} ON CONFLICT (module, action) DO NOTHING RETURNING *`,
+        values,
+      );
+      await pool.query(
+        `INSERT INTO role_permissions (role_id, permissions_id) VALUES ($1, $2) RETURNING *`,
+        [roleResult.rows[0].id, permissionResult.rows[0].id],
+      );
+    }
 
     return res.status(201).json({
       success: true,
@@ -305,7 +263,6 @@ export const createAdminUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error.",
-      error,
     });
   }
 };
@@ -498,10 +455,19 @@ export const user_login = async (req, res) => {
       `SELECT * FROM users WHERE email = $1`,
       [email],
     );
-    if (existing_user.rowCount != 1) {
+    if (existing_user.rowCount === 0) {
       return res.status(400).json({
         success: false,
         message: "Invaild user credintials.",
+      });
+    }
+    if (
+      existing_user.rows[0].status != "inactive" ||
+      existing_user.rows[0].status != "suspended"
+    ) {
+      return res.status(403).json({
+        message: "Account is inactive or suspended",
+        success: false,
       });
     }
     const user_password = existing_user.rows[0].password_hash;
@@ -522,40 +488,57 @@ export const user_login = async (req, res) => {
       [existing_user.rows[0].id],
     );
 
-    if (check_user_email.rows[0].is_verified != true) {
-      return res.status(400).json({
+    if (!check_user_email.rows[0].is_verified) {
+      return res.status(403).json({
         success: false,
         message: "Please verify your email first.",
       });
     }
-    // const user_roles = await pool.query(
-    //   `SELECT role_id FROM user_roles WHERE user_id = $1`,
-    //   [existing_user.rows[0].id],
-    // );
-    // if (user_roles.rowCount < 1) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "User role has invalid role type.",
-    //   });
-    // }
-    // const roles = await pool.query(`SELECT name FROM roles WHERE id = $1`, [
-    //   user_roles.rows[0].role_id,
-    // ]);
-    // if (roles.rowCount !== 1) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Invalid role.",
-    //   });
-    // }
+    const user_roles = await pool.query(
+      `SELECT role_id FROM user_roles WHERE user_id = $1`,
+      [existing_user.rows[0].id],
+    );
+    if (user_roles.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "User role has invalid role type.",
+      });
+    }
+    const roles = await pool.query(`SELECT name FROM roles WHERE id = $1`, [
+      user_roles.rows[0].role_id,
+    ]);
+    if (roles.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role.",
+      });
+    }
+    const role_permissions = await pool.query(
+      `SELECT permission_id FROM role_permissions WHERE role_id = $1`,
+      [user_roles.rows[0].role_id],
+    );
+    if (role_permissions.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role permission.",
+      });
+    }
+    const permissions = await pool.query(
+      `SELECT module, action FROM permissions WHERE id = $1`,
+      [role_permissions.rows[0].permission_id],
+    );
+    if (permissions.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid permission.",
+      });
+    }
     const token = jwt.sign(
       {
-        id: existing_user.rows[0].id,
-        name: existing_user.rows[0].name,
-        email: existing_user.rows[0].email,
-        // role: roles.rows[0].name,
-        status: existing_user.rows[0].status,
+        user: existing_user.rows[0],
+        role: roles.rows[0].name,
         isEmailVerified: check_user_email.rows[0].is_verfied,
-        type: "user",
+        permissions: permissions.rows[0],
       },
       process.env.JWT_SECRET,
       { expiresIn: "1d" },
@@ -574,7 +557,6 @@ export const user_login = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error.",
-      error,
     });
   }
 };

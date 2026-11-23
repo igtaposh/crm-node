@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 
 import dotenv from "dotenv";
 import accountingPeriodRouter from "./routes/accounting/accountingPeriodRoutes.js";
@@ -35,6 +36,7 @@ const app = express();
 dotenv.config();
 
 app.use(express.json());
+app.use(cookieParser());
 
 app.use("/api/permissions", permissionRoutes);
 app.use("/api/organizations", organizationsRouter);

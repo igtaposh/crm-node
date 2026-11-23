@@ -13,23 +13,21 @@ export const userRouteProtector = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.type == "admin") {
-      return res
-        .status(401)
-        .json({
-          message: "Unauthorized access for this action",
-          success: false,
-        });
+
+    if (!decoded) {
+      return res.status(401).json({
+        message: "Unauthorized access for this action",
+        success: false,
+      });
     }
-    const result = await pool.query(`SELECT * FROM users WHERE id = $1`, [
-      decoded.id,
-    ]);
-    const user = result.rows[0];
-    if (!user) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized access", success: false });
+
+    if (!decoded.user) {
+      return res.status(401).json({
+        message: "You are unauthorized to perform this action",
+        success: false,
+      });
     }
+    const user = decoded.user;
 
     if (user.status != "inactive" || user.status != "suspended") {
       return res.status(403).json({
@@ -37,16 +35,27 @@ export const userRouteProtector = async (req, res, next) => {
         success: false,
       });
     }
-    const result_check_email = await pool.query(
-      `SELECT is_verified FROM check_user_email WHERE user_id = $1`,
-      [decoded.id],
-    );
-    if (!result_check_email.rows[0].is_verified) {
+    if (!decoded.isEmailVerified) {
       return res
         .status(403)
         .json({ message: "Account not verified", success: false });
     }
-    req.user = decoded;
+    if (!decoded.role) {
+      return res.status(403).json({
+        message: "User has invalid role assigned",
+        success: false,
+      });
+    }
+    if (!decoded.permissions) {
+      return res.status(403).json({
+        message: "User has invalid role assigned",
+        success: false,
+      });
+    }
+
+    req.user = decoded.user;
+    req.permissions = decoded.permissions;
+    req.role = decoded.role;
 
     next();
   } catch (error) {
