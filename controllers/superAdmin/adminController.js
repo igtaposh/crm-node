@@ -64,13 +64,9 @@ export const admin_login = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      { id: admin.id, type: "admin" },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "1d",
-      },
-    );
+    const token = jwt.sign({ admin: admin }, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
 
     res.cookie("token", token, {
       httpOnly: true,

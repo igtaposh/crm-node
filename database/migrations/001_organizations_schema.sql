@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS branches (
     is_head_office BOOLEAN NOT NULL DEFAULT false,
     status branch_status NOT NULL DEFAULT 'active',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
+S
     CONSTRAINT unique_branch_code_per_organization
         UNIQUE (organization_id, branch_code),
     CONSTRAINT branch_gstin_format
@@ -74,4 +74,15 @@ CREATE TABLE IF NOT EXISTS branches (
         CHECK (email IS NULL OR email ~ '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'),
     CONSTRAINT branch_phone_format
         CHECK (phone IS NULL OR phone ~ '^[6-9]\d{9}$')
+);
+
+CREATE TABLE IF NOT EXISTS organization_update_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID  NOT NULL  REFERENCES organizations(id) ON DELETE CASCADE,
+    requested_data JSONB NOT NULL CHECK(requested_data <> '{}'::jsonb),
+    status VARCHAR(100) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','rejected')),
+    remark TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ,
+    rejected_at TIMESTAMPTZ
 );

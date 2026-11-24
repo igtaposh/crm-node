@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS check_user_email (
 
 CREATE TABLE IF NOT EXISTS user_otp (
     user_id UUID REFERENCES users(id) NOT NULL,
-    otp VARCHAR(6) NOT NULL,
+    otp TEXT NOT NULL,
     expires_at TIMESTAMP NOT NULL DEFAULT (NOW() + INTERVAL '10 minutes')
 );
 

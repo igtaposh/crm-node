@@ -27,8 +27,16 @@ export const userRouteProtector = async (req, res, next) => {
         success: false,
       });
     }
+    if (
+      decoded.organization.status != "inactive" ||
+      decoded.organization.status != "suspended"
+    ) {
+      return res.status(403).json({
+        message: "Organization is inactive or suspended",
+        success: false,
+      });
+    }
     const user = decoded.user;
-
     if (user.status != "inactive" || user.status != "suspended") {
       return res.status(403).json({
         message: "Account is inactive or suspended",
