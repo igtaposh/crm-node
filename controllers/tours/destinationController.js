@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -6,7 +6,6 @@ const DESTINATION_STATUSES = ["active", "inactive"];
 
 export const createDestination = async (req, res) => {
   const {
-    organization_id,
     name,
     slug,
     state,
@@ -15,20 +14,14 @@ export const createDestination = async (req, res) => {
     latitude,
     longitude,
     status,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
-    if (!organization_id || !name) {
+    if (!name) {
       return res.status(400).json({
         success: false,
-        message: "organization_id and name are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "name are required.",
       });
     }
 
@@ -71,30 +64,19 @@ export const createDestination = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllDestinations = async (req, res) => {
-  const { organization_id, status } = req.query;
+  const { status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM destinations WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (status) {
       params.push(status);
@@ -110,11 +92,7 @@ export const getAllDestinations = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -129,8 +107,8 @@ export const getDestinationById = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT * FROM destinations WHERE id = $1`,
-      [id],
+      `SELECT * FROM destinations WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -146,11 +124,7 @@ export const getDestinationById = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -165,7 +139,7 @@ export const updateDestination = async (req, res) => {
     latitude,
     longitude,
     status,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -192,9 +166,8 @@ export const updateDestination = async (req, res) => {
            latitude = COALESCE($6, latitude),
            longitude = COALESCE($7, longitude),
            status = COALESCE($8, status)
-       WHERE id = $9
-       RETURNING *`,
-      [
+       WHERE id = $9 AND organization_id = $10
+       RETURNING *`, [
         name ?? null,
         slug ?? null,
         state ?? null,
@@ -204,6 +177,7 @@ export const updateDestination = async (req, res) => {
         longitude ?? null,
         status ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -220,11 +194,7 @@ export const updateDestination = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -239,8 +209,8 @@ export const deleteDestination = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM destinations WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM destinations WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -255,10 +225,6 @@ export const deleteDestination = async (req, res) => {
       message: "Destination deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

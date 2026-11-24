@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { userRouteProtector } from "../../middlewares/userRouteProtector.js";
+import { require_permission, userRouteProtector } from "../../middlewares/userRouteProtector.js";
 import {
   createNotification,
   deleteNotification,
@@ -10,7 +10,7 @@ import {
 
 const router = Router();
 
-router.post("/create", userRouteProtector, createNotification);
+router.post("/create", userRouteProtector, require_permission("etc", "create"), createNotification);
 router.get("/get-all", userRouteProtector, getAllNotifications);
 router.patch("/mark-read/:id", userRouteProtector, markAsRead);
 router.delete("/:id", userRouteProtector, deleteNotification);

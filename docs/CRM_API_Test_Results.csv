@@ -1,0 +1,546 @@
+Module,Method,Route,Handler,Scenario,Expected status,Actual status,Result
+superAdmin,POST,/api/admin/login,admin_login,invalid body,400,400,PASS
+superAdmin,POST,/api/admin/login,admin_login,valid,200,200,PASS
+users,POST,/api/users/login,user_login,invalid body,400,400,PASS
+users,POST,/api/users/login,user_login,valid,200,200,PASS
+users,POST,/api/users/login,user_login,wrong password,401,401,PASS
+organizations,POST,/api/organizations,create_organization,no session,401,401,PASS
+organizations,POST,/api/organizations,create_organization,invalid body,400,400,PASS
+organizations,POST,/api/organizations,create_organization,valid,201,201,PASS
+organizations,POST,/api/organizations,create_organization,invalid URL,400,400,PASS
+users,POST,/api/users/admin,create_admin_user,no session,401,401,PASS
+users,POST,/api/users/admin,create_admin_user,invalid body,400,400,PASS
+users,POST,/api/users/admin,create_admin_user,valid,201,201,PASS
+users,POST,/api/roles,create_roles,no session,401,401,PASS
+users,POST,/api/roles,create_roles,invalid body,400,400,PASS
+users,POST,/api/roles,create_roles,valid,201,201,PASS
+organizations,POST,/api/branches,create_branch,no session,401,401,PASS
+organizations,POST,/api/branches,create_branch,invalid body,400,400,PASS
+organizations,POST,/api/branches,create_branch,valid,201,201,PASS
+users,POST,/api/users/user,create_user,no session,401,401,PASS
+users,POST,/api/users/user,create_user,invalid body,400,400,PASS
+users,POST,/api/users/user,create_user,valid,201,201,PASS
+users,POST,/api/permissions,create_premissions,no session,401,401,PASS
+users,POST,/api/permissions,create_premissions,invalid body,400,400,PASS
+users,POST,/api/permissions,create_premissions,valid,201,201,PASS
+organizations,POST,/api/organizations/update/request,request_organization_update,no session,401,401,PASS
+organizations,POST,/api/organizations/update/request,request_organization_update,invalid body,400,400,PASS
+organizations,POST,/api/organizations/update/request,request_organization_update,valid,201,201,PASS
+organizations,PATCH,/api/organizations/update/request/accept{/:id},accept_organization_update,no session,401,401,PASS
+organizations,PATCH,/api/organizations/update/request/accept{/:id},accept_organization_update,valid,200,200,PASS
+organizations,PATCH,/api/organizations/update/request/accept{/:id},accept_organization_update,optional UUID path already consumed,404,404,PASS
+crm,POST,/api/customers,createCustomer,no session,401,401,PASS
+crm,POST,/api/customers,createCustomer,invalid body,400,400,PASS
+crm,POST,/api/customers,createCustomer,valid,201,201,PASS
+crm,POST,/api/customers,createCustomer,duplicate customer code,400/409,400,PASS
+crm,POST,/api/customers,createCustomer,invalid email,400,400,PASS
+suppliers,POST,/api/suppliers,createSupplier,no session,401,401,PASS
+suppliers,POST,/api/suppliers,createSupplier,invalid body,400,400,PASS
+suppliers,POST,/api/suppliers,createSupplier,valid,201,201,PASS
+tours,POST,/api/destinations,createDestination,no session,401,401,PASS
+tours,POST,/api/destinations,createDestination,invalid body,400,400,PASS
+tours,POST,/api/destinations,createDestination,valid,201,201,PASS
+tours,POST,/api/cancellation-policies,createCancellationPolicy,no session,401,401,PASS
+tours,POST,/api/cancellation-policies,createCancellationPolicy,invalid body,400,400,PASS
+tours,POST,/api/cancellation-policies,createCancellationPolicy,valid,201,201,PASS
+tours,POST,/api/tour-packages,createTourPackage,no session,401,401,PASS
+tours,POST,/api/tour-packages,createTourPackage,invalid body,400,400,PASS
+tours,POST,/api/tour-packages,createTourPackage,valid,201,201,PASS
+crm,POST,/api/leads,createLead,no session,401,401,PASS
+crm,POST,/api/leads,createLead,invalid body,400,400,PASS
+crm,POST,/api/leads,createLead,valid,201,201,PASS
+crm,POST,/api/enquiries,createEnquiry,no session,401,401,PASS
+crm,POST,/api/enquiries,createEnquiry,invalid body,400,400,PASS
+crm,POST,/api/enquiries,createEnquiry,valid,201,201,PASS
+crm,POST,/api/tasks,createTask,no session,401,401,PASS
+crm,POST,/api/tasks,createTask,invalid body,400,400,PASS
+crm,POST,/api/tasks,createTask,valid,201,201,PASS
+quotations,POST,/api/quotations,createQuotation,no session,401,401,PASS
+quotations,POST,/api/quotations,createQuotation,invalid body,400,400,PASS
+quotations,POST,/api/quotations,createQuotation,valid,201,201,PASS
+bookings,POST,/api/bookings,createBooking,no session,401,401,PASS
+bookings,POST,/api/bookings,createBooking,invalid body,400,400,PASS
+bookings,POST,/api/bookings,createBooking,valid,201,201,PASS
+bookings,POST,/api/bookings,createBooking,negative guest count rejected by database,400,400,PASS
+suppliers,POST,/api/services,createBookingService,no session,401,401,PASS
+suppliers,POST,/api/services,createBookingService,invalid body,400,400,PASS
+suppliers,POST,/api/services,createBookingService,valid,201,201,PASS
+invoices,POST,/api/invoices,createInvoice,no session,401,401,PASS
+invoices,POST,/api/invoices,createInvoice,invalid body,400,400,PASS
+invoices,POST,/api/invoices,createInvoice,valid,201,201,PASS
+invoices,POST,/api/vendor-bills,createVendorBill,no session,401,401,PASS
+invoices,POST,/api/vendor-bills,createVendorBill,invalid body,400,400,PASS
+invoices,POST,/api/vendor-bills,createVendorBill,valid,201,201,PASS
+invoices,POST,/api/credit-notes,createCreditNote,no session,401,401,PASS
+invoices,POST,/api/credit-notes,createCreditNote,invalid body,400,400,PASS
+invoices,POST,/api/credit-notes,createCreditNote,valid,201,201,PASS
+invoices,POST,/api/credit-notes/vendor-credits,createVendorCredit,no session,401,401,PASS
+invoices,POST,/api/credit-notes/vendor-credits,createVendorCredit,invalid body,400,400,PASS
+invoices,POST,/api/credit-notes/vendor-credits,createVendorCredit,valid,201,201,PASS
+finance,POST,/api/expenses,createExpense,no session,401,401,PASS
+finance,POST,/api/expenses,createExpense,invalid body,400,400,PASS
+finance,POST,/api/expenses,createExpense,valid,201,201,PASS
+finance,POST,/api/payments,createPayment,no session,401,401,PASS
+finance,POST,/api/payments,createPayment,invalid body,400,400,PASS
+finance,POST,/api/payments,createPayment,missing permission,403,403,PASS
+finance,POST,/api/payments,createPayment,valid,201,201,PASS
+finance,POST,/api/refunds,createRefund,no session,401,401,PASS
+finance,POST,/api/refunds,createRefund,invalid body,400,400,PASS
+finance,POST,/api/refunds,createRefund,valid,201,201,PASS
+finance,POST,/api/supplier-payments,createSupplierPayment,no session,401,401,PASS
+finance,POST,/api/supplier-payments,createSupplierPayment,invalid body,400,400,PASS
+finance,POST,/api/supplier-payments,createSupplierPayment,valid,201,201,PASS
+system,POST,/api/documents,createDocument,no session,401,401,PASS
+system,POST,/api/documents,createDocument,invalid body,400,400,PASS
+system,POST,/api/documents,createDocument,valid,201,201,PASS
+system,POST,/api/notifications/create,createNotification,no session,401,401,PASS
+system,POST,/api/notifications/create,createNotification,invalid body,400,400,PASS
+system,POST,/api/notifications/create,createNotification,missing permission,403,403,PASS
+system,POST,/api/notifications/create,createNotification,valid,201,201,PASS
+accounting,POST,/api/accounting/periods,createAccountingPeriod,no session,401,401,PASS
+accounting,POST,/api/accounting/periods,createAccountingPeriod,invalid body,400,400,PASS
+accounting,POST,/api/accounting/periods,createAccountingPeriod,valid,201,201,PASS
+accounting,POST,/api/chart-of-accounts,createAccount,no session,401,401,PASS
+accounting,POST,/api/chart-of-accounts,createAccount,invalid body,400,400,PASS
+accounting,POST,/api/chart-of-accounts,createAccount,valid,201,201,PASS
+accounting,POST,/api/journal-entries,createJournalEntry,no session,401,401,PASS
+accounting,POST,/api/journal-entries,createJournalEntry,invalid body,400,400,PASS
+accounting,POST,/api/journal-entries,createJournalEntry,valid,201,201,PASS
+accounting,POST,/api/journal-entries,createJournalEntry,unbalanced ledger,400,400,PASS
+accounting,POST,/api/accounting/bank-transactions,createBankTransaction,no session,401,401,PASS
+accounting,POST,/api/accounting/bank-transactions,createBankTransaction,invalid body,400,400,PASS
+accounting,POST,/api/accounting/bank-transactions,createBankTransaction,valid,201,201,PASS
+accounting,GET,/api/accounting/periods,getAllAccountingPeriods,no session,401,401,PASS
+accounting,GET,/api/accounting/periods,getAllAccountingPeriods,valid,200,200,PASS
+accounting,PUT,/api/accounting/periods/:id/status,updateAccountingPeriodStatus,no session,401,401,PASS
+accounting,PUT,/api/accounting/periods/:id/status,updateAccountingPeriodStatus,invalid body,400,400,PASS
+accounting,PUT,/api/accounting/periods/:id/status,updateAccountingPeriodStatus,malformed path ID,400,400,PASS
+accounting,PUT,/api/accounting/periods/:id/status,updateAccountingPeriodStatus,other organization,400/403/404/409,404,PASS
+accounting,PUT,/api/accounting/periods/:id/status,updateAccountingPeriodStatus,valid,200,200,PASS
+accounting,GET,/api/accounting/bank-transactions,getAllBankTransactions,no session,401,401,PASS
+accounting,GET,/api/accounting/bank-transactions,getAllBankTransactions,valid,200,200,PASS
+accounting,GET,/api/chart-of-accounts,getAllAccounts,no session,401,401,PASS
+accounting,GET,/api/chart-of-accounts,getAllAccounts,valid,200,200,PASS
+accounting,GET,/api/chart-of-accounts/:id,getAccountById,no session,401,401,PASS
+accounting,GET,/api/chart-of-accounts/:id,getAccountById,malformed path ID,400,400,PASS
+accounting,GET,/api/chart-of-accounts/:id,getAccountById,other organization,400/403/404/409,404,PASS
+accounting,GET,/api/chart-of-accounts/:id,getAccountById,valid,200,200,PASS
+accounting,PUT,/api/chart-of-accounts/:id,updateAccount,no session,401,401,PASS
+accounting,PUT,/api/chart-of-accounts/:id,updateAccount,invalid body,400,400,PASS
+accounting,PUT,/api/chart-of-accounts/:id,updateAccount,malformed path ID,400,400,PASS
+accounting,PUT,/api/chart-of-accounts/:id,updateAccount,other organization,400/403/404/409,404,PASS
+accounting,PUT,/api/chart-of-accounts/:id,updateAccount,valid,200,200,PASS
+accounting,GET,/api/journal-entries,getAllJournalEntries,no session,401,401,PASS
+accounting,GET,/api/journal-entries,getAllJournalEntries,valid,200,200,PASS
+accounting,GET,/api/journal-entries/:id,getJournalEntryById,no session,401,401,PASS
+accounting,GET,/api/journal-entries/:id,getJournalEntryById,malformed path ID,400,400,PASS
+accounting,GET,/api/journal-entries/:id,getJournalEntryById,other organization,400/403/404/409,404,PASS
+accounting,GET,/api/journal-entries/:id,getJournalEntryById,valid,200,200,PASS
+accounting,POST,/api/journal-entries/:id/reverse,reverseJournalEntry,no session,401,401,PASS
+accounting,POST,/api/journal-entries/:id/reverse,reverseJournalEntry,malformed path ID,400,400,PASS
+accounting,POST,/api/journal-entries/:id/reverse,reverseJournalEntry,other organization,400/403/404/409,404,PASS
+accounting,POST,/api/journal-entries/:id/reverse,reverseJournalEntry,missing permission,403,403,PASS
+accounting,POST,/api/journal-entries/:id/reverse,reverseJournalEntry,valid,200,200,PASS
+bookings,GET,/api/bookings,getAllBookings,no session,401,401,PASS
+bookings,GET,/api/bookings,getAllBookings,valid,200,200,PASS
+bookings,GET,/api/bookings/:id,getBookingById,no session,401,401,PASS
+bookings,GET,/api/bookings/:id,getBookingById,malformed path ID,400,400,PASS
+bookings,GET,/api/bookings/:id,getBookingById,other organization,400/403/404/409,404,PASS
+bookings,GET,/api/bookings/:id,getBookingById,valid,200,200,PASS
+bookings,PUT,/api/bookings/:id,updateBooking,no session,401,401,PASS
+bookings,PUT,/api/bookings/:id,updateBooking,invalid body,400,400,PASS
+bookings,PUT,/api/bookings/:id,updateBooking,malformed path ID,400,400,PASS
+bookings,PUT,/api/bookings/:id,updateBooking,other organization,400/403/404/409,404,PASS
+bookings,PUT,/api/bookings/:id,updateBooking,valid,200,200,PASS
+bookings,POST,/api/bookings/:id/guests,addBookingGuest,no session,401,401,PASS
+bookings,POST,/api/bookings/:id/guests,addBookingGuest,invalid body,400,400,PASS
+bookings,POST,/api/bookings/:id/guests,addBookingGuest,malformed path ID,400,400,PASS
+bookings,POST,/api/bookings/:id/guests,addBookingGuest,other organization,400/403/404/409,409,PASS
+bookings,POST,/api/bookings/:id/guests,addBookingGuest,valid,201,201,PASS
+bookings,POST,/api/bookings/:id/cancel,cancelBooking,no session,401,401,PASS
+bookings,POST,/api/bookings/:id/cancel,cancelBooking,invalid body,400,400,PASS
+bookings,POST,/api/bookings/:id/cancel,cancelBooking,malformed path ID,400,400,PASS
+bookings,POST,/api/bookings/:id/cancel,cancelBooking,other organization,400/403/404/409,409,PASS
+bookings,POST,/api/bookings/:id/cancel,cancelBooking,valid,201,201,PASS
+crm,GET,/api/customers,getAllCustomers,no session,401,401,PASS
+crm,GET,/api/customers,getAllCustomers,missing permission,403,403,PASS
+crm,GET,/api/customers,getAllCustomers,valid,200,200,PASS
+crm,GET,/api/customers,getAllCustomers,expired session,401,401,PASS
+crm,GET,/api/customers,getAllCustomers,invalid token,401,401,PASS
+crm,GET,/api/customers,getAllCustomers,forged tenant filter,200,200,PASS
+crm,GET,/api/customers/:id,getCustomerById,no session,401,401,PASS
+crm,GET,/api/customers/:id,getCustomerById,malformed path ID,400,400,PASS
+crm,GET,/api/customers/:id,getCustomerById,other organization,400/403/404/409,404,PASS
+crm,GET,/api/customers/:id,getCustomerById,valid,200,200,PASS
+crm,GET,/api/customers/:id,getCustomerById,nonexistent customer,404,404,PASS
+crm,PUT,/api/customers/:id,updateCustomer,no session,401,401,PASS
+crm,PUT,/api/customers/:id,updateCustomer,invalid body,400,400,PASS
+crm,PUT,/api/customers/:id,updateCustomer,malformed path ID,400,400,PASS
+crm,PUT,/api/customers/:id,updateCustomer,other organization,400/403/404/409,404,PASS
+crm,PUT,/api/customers/:id,updateCustomer,valid,200,200,PASS
+crm,GET,/api/enquiries,getAllEnquiries,no session,401,401,PASS
+crm,GET,/api/enquiries,getAllEnquiries,valid,200,200,PASS
+crm,GET,/api/enquiries/:id,getEnquiryById,no session,401,401,PASS
+crm,GET,/api/enquiries/:id,getEnquiryById,malformed path ID,400,400,PASS
+crm,GET,/api/enquiries/:id,getEnquiryById,other organization,400/403/404/409,404,PASS
+crm,GET,/api/enquiries/:id,getEnquiryById,valid,200,200,PASS
+crm,PUT,/api/enquiries/:id,updateEnquiry,no session,401,401,PASS
+crm,PUT,/api/enquiries/:id,updateEnquiry,invalid body,400,400,PASS
+crm,PUT,/api/enquiries/:id,updateEnquiry,malformed path ID,400,400,PASS
+crm,PUT,/api/enquiries/:id,updateEnquiry,other organization,400/403/404/409,404,PASS
+crm,PUT,/api/enquiries/:id,updateEnquiry,valid,200,200,PASS
+crm,GET,/api/leads,getAllLeads,no session,401,401,PASS
+crm,GET,/api/leads,getAllLeads,valid,200,200,PASS
+crm,GET,/api/leads/:id,getLeadById,no session,401,401,PASS
+crm,GET,/api/leads/:id,getLeadById,malformed path ID,400,400,PASS
+crm,GET,/api/leads/:id,getLeadById,other organization,400/403/404/409,404,PASS
+crm,GET,/api/leads/:id,getLeadById,valid,200,200,PASS
+crm,PUT,/api/leads/:id,updateLead,no session,401,401,PASS
+crm,PUT,/api/leads/:id,updateLead,invalid body,400,400,PASS
+crm,PUT,/api/leads/:id,updateLead,malformed path ID,400,400,PASS
+crm,PUT,/api/leads/:id,updateLead,other organization,400/403/404/409,404,PASS
+crm,PUT,/api/leads/:id,updateLead,valid,200,200,PASS
+crm,POST,/api/leads/:id/activities,addLeadActivity,no session,401,401,PASS
+crm,POST,/api/leads/:id/activities,addLeadActivity,invalid body,400,400,PASS
+crm,POST,/api/leads/:id/activities,addLeadActivity,malformed path ID,400,400,PASS
+crm,POST,/api/leads/:id/activities,addLeadActivity,other organization,400/403/404/409,409,PASS
+crm,POST,/api/leads/:id/activities,addLeadActivity,valid,201,201,PASS
+crm,GET,/api/tasks,getAllTasks,no session,401,401,PASS
+crm,GET,/api/tasks,getAllTasks,valid,200,200,PASS
+crm,GET,/api/tasks/:id,getTaskById,no session,401,401,PASS
+crm,GET,/api/tasks/:id,getTaskById,malformed path ID,400,400,PASS
+crm,GET,/api/tasks/:id,getTaskById,other organization,400/403/404/409,404,PASS
+crm,GET,/api/tasks/:id,getTaskById,valid,200,200,PASS
+crm,PUT,/api/tasks/:id,updateTask,no session,401,401,PASS
+crm,PUT,/api/tasks/:id,updateTask,invalid body,400,400,PASS
+crm,PUT,/api/tasks/:id,updateTask,malformed path ID,400,400,PASS
+crm,PUT,/api/tasks/:id,updateTask,other organization,400/403/404/409,404,PASS
+crm,PUT,/api/tasks/:id,updateTask,valid,200,200,PASS
+finance,GET,/api/expenses,getAllExpenses,no session,401,401,PASS
+finance,GET,/api/expenses,getAllExpenses,valid,200,200,PASS
+finance,GET,/api/expenses/:id,getExpenseById,no session,401,401,PASS
+finance,GET,/api/expenses/:id,getExpenseById,malformed path ID,400,400,PASS
+finance,GET,/api/expenses/:id,getExpenseById,other organization,400/403/404/409,404,PASS
+finance,GET,/api/expenses/:id,getExpenseById,valid,200,200,PASS
+finance,PUT,/api/expenses/:id,updateExpense,no session,401,401,PASS
+finance,PUT,/api/expenses/:id,updateExpense,invalid body,400,400,PASS
+finance,PUT,/api/expenses/:id,updateExpense,malformed path ID,400,400,PASS
+finance,PUT,/api/expenses/:id,updateExpense,other organization,400/403/404/409,404,PASS
+finance,PUT,/api/expenses/:id,updateExpense,valid,200,200,PASS
+finance,GET,/api/payments,getAllPayments,no session,401,401,PASS
+finance,GET,/api/payments,getAllPayments,valid,200,200,PASS
+finance,GET,/api/payments/:id,getPaymentById,no session,401,401,PASS
+finance,GET,/api/payments/:id,getPaymentById,malformed path ID,400,400,PASS
+finance,GET,/api/payments/:id,getPaymentById,other organization,400/403/404/409,404,PASS
+finance,GET,/api/payments/:id,getPaymentById,valid,200,200,PASS
+finance,PUT,/api/payments/:id,updatePayment,no session,401,401,PASS
+finance,PUT,/api/payments/:id,updatePayment,invalid body,400,400,PASS
+finance,PUT,/api/payments/:id,updatePayment,malformed path ID,400,400,PASS
+finance,PUT,/api/payments/:id,updatePayment,other organization,400/403/404/409,404,PASS
+finance,PUT,/api/payments/:id,updatePayment,valid,200,200,PASS
+finance,POST,/api/payments/:id/allocate,allocatePayment,no session,401,401,PASS
+finance,POST,/api/payments/:id/allocate,allocatePayment,invalid body,400,400,PASS
+finance,POST,/api/payments/:id/allocate,allocatePayment,malformed path ID,400,400,PASS
+finance,POST,/api/payments/:id/allocate,allocatePayment,other organization,400/403/404/409,404,PASS
+finance,POST,/api/payments/:id/allocate,allocatePayment,valid,201,201,PASS
+finance,POST,/api/payments/:id/allocate,allocatePayment,exceeds balance,409,409,PASS
+finance,POST,/api/payments/:id/allocate,allocatePayment,zero allocation,400,400,PASS
+finance,GET,/api/refunds,getAllRefunds,no session,401,401,PASS
+finance,GET,/api/refunds,getAllRefunds,valid,200,200,PASS
+finance,GET,/api/refunds/:id,getRefundById,no session,401,401,PASS
+finance,GET,/api/refunds/:id,getRefundById,malformed path ID,400,400,PASS
+finance,GET,/api/refunds/:id,getRefundById,other organization,400/403/404/409,404,PASS
+finance,GET,/api/refunds/:id,getRefundById,valid,200,200,PASS
+finance,PUT,/api/refunds/:id/status,updateRefundStatus,no session,401,401,PASS
+finance,PUT,/api/refunds/:id/status,updateRefundStatus,invalid body,400,400,PASS
+finance,PUT,/api/refunds/:id/status,updateRefundStatus,malformed path ID,400,400,PASS
+finance,PUT,/api/refunds/:id/status,updateRefundStatus,other organization,400/403/404/409,404,PASS
+finance,PUT,/api/refunds/:id/status,updateRefundStatus,valid,200,200,PASS
+finance,GET,/api/supplier-payments,getAllSupplierPayments,no session,401,401,PASS
+finance,GET,/api/supplier-payments,getAllSupplierPayments,valid,200,200,PASS
+finance,GET,/api/supplier-payments/:id,getSupplierPaymentById,no session,401,401,PASS
+finance,GET,/api/supplier-payments/:id,getSupplierPaymentById,malformed path ID,400,400,PASS
+finance,GET,/api/supplier-payments/:id,getSupplierPaymentById,other organization,400/403/404/409,404,PASS
+finance,GET,/api/supplier-payments/:id,getSupplierPaymentById,valid,200,200,PASS
+finance,POST,/api/supplier-payments/:id/allocate,allocateSupplierPayment,no session,401,401,PASS
+finance,POST,/api/supplier-payments/:id/allocate,allocateSupplierPayment,invalid body,400,400,PASS
+finance,POST,/api/supplier-payments/:id/allocate,allocateSupplierPayment,malformed path ID,400,400,PASS
+finance,POST,/api/supplier-payments/:id/allocate,allocateSupplierPayment,other organization,400/403/404/409,404,PASS
+finance,POST,/api/supplier-payments/:id/allocate,allocateSupplierPayment,valid,201,201,PASS
+invoices,GET,/api/credit-notes,getAllCreditNotes,no session,401,401,PASS
+invoices,GET,/api/credit-notes,getAllCreditNotes,valid,200,200,PASS
+invoices,GET,/api/credit-notes/:id,getCreditNoteById,no session,401,401,PASS
+invoices,GET,/api/credit-notes/:id,getCreditNoteById,malformed path ID,400,400,PASS
+invoices,GET,/api/credit-notes/:id,getCreditNoteById,other organization,400/403/404/409,404,PASS
+invoices,GET,/api/credit-notes/:id,getCreditNoteById,valid,200,200,PASS
+invoices,GET,/api/credit-notes/vendor-credits/all,getAllVendorCredits,no session,401,401,PASS
+invoices,GET,/api/credit-notes/vendor-credits/all,getAllVendorCredits,valid,200,200,PASS
+invoices,GET,/api/credit-notes/vendor-credits/:id,getVendorCreditById,no session,401,401,PASS
+invoices,GET,/api/credit-notes/vendor-credits/:id,getVendorCreditById,malformed path ID,400,400,PASS
+invoices,GET,/api/credit-notes/vendor-credits/:id,getVendorCreditById,other organization,400/403/404/409,404,PASS
+invoices,GET,/api/credit-notes/vendor-credits/:id,getVendorCreditById,valid,200,200,PASS
+invoices,GET,/api/invoices,getAllInvoices,no session,401,401,PASS
+invoices,GET,/api/invoices,getAllInvoices,valid,200,200,PASS
+invoices,GET,/api/invoices/:id,getInvoiceById,no session,401,401,PASS
+invoices,GET,/api/invoices/:id,getInvoiceById,malformed path ID,400,400,PASS
+invoices,GET,/api/invoices/:id,getInvoiceById,other organization,400/403/404/409,404,PASS
+invoices,GET,/api/invoices/:id,getInvoiceById,valid,200,200,PASS
+invoices,PUT,/api/invoices/:id/status,updateInvoiceStatus,no session,401,401,PASS
+invoices,PUT,/api/invoices/:id/status,updateInvoiceStatus,invalid body,400,400,PASS
+invoices,PUT,/api/invoices/:id/status,updateInvoiceStatus,malformed path ID,400,400,PASS
+invoices,PUT,/api/invoices/:id/status,updateInvoiceStatus,other organization,400/403/404/409,404,PASS
+invoices,PUT,/api/invoices/:id/status,updateInvoiceStatus,valid,200,200,PASS
+invoices,GET,/api/vendor-bills,getAllVendorBills,no session,401,401,PASS
+invoices,GET,/api/vendor-bills,getAllVendorBills,valid,200,200,PASS
+invoices,GET,/api/vendor-bills/:id,getVendorBillById,no session,401,401,PASS
+invoices,GET,/api/vendor-bills/:id,getVendorBillById,malformed path ID,400,400,PASS
+invoices,GET,/api/vendor-bills/:id,getVendorBillById,other organization,400/403/404/409,404,PASS
+invoices,GET,/api/vendor-bills/:id,getVendorBillById,valid,200,200,PASS
+invoices,PUT,/api/vendor-bills/:id,updateVendorBill,no session,401,401,PASS
+invoices,PUT,/api/vendor-bills/:id,updateVendorBill,invalid body,400,400,PASS
+invoices,PUT,/api/vendor-bills/:id,updateVendorBill,malformed path ID,400,400,PASS
+invoices,PUT,/api/vendor-bills/:id,updateVendorBill,other organization,400/403/404/409,404,PASS
+invoices,PUT,/api/vendor-bills/:id,updateVendorBill,valid,200,200,PASS
+users,GET,/api/permissions/:id,get_permission_by_id,no session,401,401,PASS
+users,GET,/api/permissions/:id,get_permission_by_id,malformed path ID,400,400,PASS
+users,GET,/api/permissions/:id,get_permission_by_id,valid,200,200,PASS
+organizations,GET,/api/organizations,get_all_organizations,no session,401,401,PASS
+organizations,GET,/api/organizations,get_all_organizations,valid,200,200,PASS
+organizations,PATCH,/api/organizations/update/status/:id,update_organization_status,no session,401,401,PASS
+organizations,PATCH,/api/organizations/update/status/:id,update_organization_status,invalid body,400,400,PASS
+organizations,PATCH,/api/organizations/update/status/:id,update_organization_status,malformed path ID,400,400,PASS
+organizations,PATCH,/api/organizations/update/status/:id,update_organization_status,valid,200,200,PASS
+organizations,GET,/api/organizations/me,get_organizatins_by_id,no session,401,401,PASS
+organizations,GET,/api/organizations/me,get_organizatins_by_id,valid,200,200,PASS
+organizations,GET,/api/branches,get_all_branches,no session,401,401,PASS
+organizations,GET,/api/branches,get_all_branches,valid,200,200,PASS
+organizations,GET,/api/branches/:id,get_branch_by_id,no session,401,401,PASS
+organizations,GET,/api/branches/:id,get_branch_by_id,malformed path ID,400,400,PASS
+organizations,GET,/api/branches/:id,get_branch_by_id,other organization,400/403/404/409,404,PASS
+organizations,GET,/api/branches/:id,get_branch_by_id,valid,200,200,PASS
+organizations,PATCH,/api/branches/update/:id,update_branch,no session,401,401,PASS
+organizations,PATCH,/api/branches/update/:id,update_branch,invalid body,400,400,PASS
+organizations,PATCH,/api/branches/update/:id,update_branch,malformed path ID,400,400,PASS
+organizations,PATCH,/api/branches/update/:id,update_branch,other organization,400/403/404/409,404,PASS
+organizations,PATCH,/api/branches/update/:id,update_branch,valid,200,200,PASS
+organizations,PATCH,/api/branches/update/status/:id,update_branch_status,no session,401,401,PASS
+organizations,PATCH,/api/branches/update/status/:id,update_branch_status,invalid body,400,400,PASS
+organizations,PATCH,/api/branches/update/status/:id,update_branch_status,malformed path ID,400,400,PASS
+organizations,PATCH,/api/branches/update/status/:id,update_branch_status,other organization,400/403/404/409,404,PASS
+organizations,PATCH,/api/branches/update/status/:id,update_branch_status,valid,200,200,PASS
+quotations,GET,/api/quotations,getAllQuotations,no session,401,401,PASS
+quotations,GET,/api/quotations,getAllQuotations,valid,200,200,PASS
+quotations,GET,/api/quotations/:id,getQuotationById,no session,401,401,PASS
+quotations,GET,/api/quotations/:id,getQuotationById,malformed path ID,400,400,PASS
+quotations,GET,/api/quotations/:id,getQuotationById,other organization,400/403/404/409,404,PASS
+quotations,GET,/api/quotations/:id,getQuotationById,valid,200,200,PASS
+quotations,PUT,/api/quotations/:id,updateQuotation,no session,401,401,PASS
+quotations,PUT,/api/quotations/:id,updateQuotation,invalid body,400,400,PASS
+quotations,PUT,/api/quotations/:id,updateQuotation,malformed path ID,400,400,PASS
+quotations,PUT,/api/quotations/:id,updateQuotation,other organization,400/403/404/409,404,PASS
+quotations,PUT,/api/quotations/:id,updateQuotation,valid,200,200,PASS
+suppliers,GET,/api/services,getAllBookingServices,no session,401,401,PASS
+suppliers,GET,/api/services,getAllBookingServices,valid,200,200,PASS
+suppliers,GET,/api/services/:id,getBookingServiceById,no session,401,401,PASS
+suppliers,GET,/api/services/:id,getBookingServiceById,malformed path ID,400,400,PASS
+suppliers,GET,/api/services/:id,getBookingServiceById,other organization,400/403/404/409,404,PASS
+suppliers,GET,/api/services/:id,getBookingServiceById,valid,200,200,PASS
+suppliers,PUT,/api/services/:id,updateBookingService,no session,401,401,PASS
+suppliers,PUT,/api/services/:id,updateBookingService,invalid body,400,400,PASS
+suppliers,PUT,/api/services/:id,updateBookingService,malformed path ID,400,400,PASS
+suppliers,PUT,/api/services/:id,updateBookingService,other organization,400/403/404/409,404,PASS
+suppliers,PUT,/api/services/:id,updateBookingService,valid,200,200,PASS
+suppliers,POST,/api/services/:id/hotel-details,addHotelDetails,no session,401,401,PASS
+suppliers,POST,/api/services/:id/hotel-details,addHotelDetails,invalid body,400,400,PASS
+suppliers,POST,/api/services/:id/hotel-details,addHotelDetails,malformed path ID,400,400,PASS
+suppliers,POST,/api/services/:id/hotel-details,addHotelDetails,other organization,400/403/404/409,404,PASS
+suppliers,POST,/api/services/:id/hotel-details,addHotelDetails,valid,201,201,PASS
+suppliers,POST,/api/services/:id/voucher,addServiceVoucher,no session,401,401,PASS
+suppliers,POST,/api/services/:id/voucher,addServiceVoucher,invalid body,400,400,PASS
+suppliers,POST,/api/services/:id/voucher,addServiceVoucher,malformed path ID,400,400,PASS
+suppliers,POST,/api/services/:id/voucher,addServiceVoucher,other organization,400/403/404/409,404,PASS
+suppliers,POST,/api/services/:id/voucher,addServiceVoucher,valid,201,201,PASS
+suppliers,GET,/api/suppliers,getAllSuppliers,no session,401,401,PASS
+suppliers,GET,/api/suppliers,getAllSuppliers,valid,200,200,PASS
+suppliers,GET,/api/suppliers/:id,getSupplierById,no session,401,401,PASS
+suppliers,GET,/api/suppliers/:id,getSupplierById,malformed path ID,400,400,PASS
+suppliers,GET,/api/suppliers/:id,getSupplierById,other organization,400/403/404/409,404,PASS
+suppliers,GET,/api/suppliers/:id,getSupplierById,valid,200,200,PASS
+suppliers,PUT,/api/suppliers/:id,updateSupplier,no session,401,401,PASS
+suppliers,PUT,/api/suppliers/:id,updateSupplier,invalid body,400,400,PASS
+suppliers,PUT,/api/suppliers/:id,updateSupplier,malformed path ID,400,400,PASS
+suppliers,PUT,/api/suppliers/:id,updateSupplier,other organization,400/403/404/409,404,PASS
+suppliers,PUT,/api/suppliers/:id,updateSupplier,valid,200,200,PASS
+suppliers,POST,/api/suppliers/:id/contacts,addSupplierContact,no session,401,401,PASS
+suppliers,POST,/api/suppliers/:id/contacts,addSupplierContact,invalid body,400,400,PASS
+suppliers,POST,/api/suppliers/:id/contacts,addSupplierContact,malformed path ID,400,400,PASS
+suppliers,POST,/api/suppliers/:id/contacts,addSupplierContact,other organization,400/403/404/409,404,PASS
+suppliers,POST,/api/suppliers/:id/contacts,addSupplierContact,valid,201,201,PASS
+system,GET,/api/documents,getAllDocuments,no session,401,401,PASS
+system,GET,/api/documents,getAllDocuments,valid,200,200,PASS
+system,GET,/api/documents/:id,getDocumentById,no session,401,401,PASS
+system,GET,/api/documents/:id,getDocumentById,malformed path ID,400,400,PASS
+system,GET,/api/documents/:id,getDocumentById,other organization,400/403/404/409,404,PASS
+system,GET,/api/documents/:id,getDocumentById,valid,200,200,PASS
+tours,GET,/api/cancellation-policies,getAllCancellationPolicies,no session,401,401,PASS
+tours,GET,/api/cancellation-policies,getAllCancellationPolicies,valid,200,200,PASS
+tours,GET,/api/cancellation-policies/:id,getCancellationPolicyById,no session,401,401,PASS
+tours,GET,/api/cancellation-policies/:id,getCancellationPolicyById,malformed path ID,400,400,PASS
+tours,GET,/api/cancellation-policies/:id,getCancellationPolicyById,other organization,400/403/404/409,404,PASS
+tours,GET,/api/cancellation-policies/:id,getCancellationPolicyById,valid,200,200,PASS
+tours,PUT,/api/cancellation-policies/:id,updateCancellationPolicy,no session,401,401,PASS
+tours,PUT,/api/cancellation-policies/:id,updateCancellationPolicy,invalid body,400,400,PASS
+tours,PUT,/api/cancellation-policies/:id,updateCancellationPolicy,malformed path ID,400,400,PASS
+tours,PUT,/api/cancellation-policies/:id,updateCancellationPolicy,other organization,400/403/404/409,404,PASS
+tours,PUT,/api/cancellation-policies/:id,updateCancellationPolicy,valid,200,200,PASS
+tours,POST,/api/cancellation-policies/:id/rules,addCancellationRule,no session,401,401,PASS
+tours,POST,/api/cancellation-policies/:id/rules,addCancellationRule,invalid body,400,400,PASS
+tours,POST,/api/cancellation-policies/:id/rules,addCancellationRule,malformed path ID,400,400,PASS
+tours,POST,/api/cancellation-policies/:id/rules,addCancellationRule,other organization,400/403/404/409,404,PASS
+tours,POST,/api/cancellation-policies/:id/rules,addCancellationRule,valid,201,201,PASS
+tours,GET,/api/destinations,getAllDestinations,no session,401,401,PASS
+tours,GET,/api/destinations,getAllDestinations,valid,200,200,PASS
+tours,GET,/api/destinations/:id,getDestinationById,no session,401,401,PASS
+tours,GET,/api/destinations/:id,getDestinationById,malformed path ID,400,400,PASS
+tours,GET,/api/destinations/:id,getDestinationById,other organization,400/403/404/409,404,PASS
+tours,GET,/api/destinations/:id,getDestinationById,valid,200,200,PASS
+tours,PUT,/api/destinations/:id,updateDestination,no session,401,401,PASS
+tours,PUT,/api/destinations/:id,updateDestination,invalid body,400,400,PASS
+tours,PUT,/api/destinations/:id,updateDestination,malformed path ID,400,400,PASS
+tours,PUT,/api/destinations/:id,updateDestination,other organization,400/403/404/409,404,PASS
+tours,PUT,/api/destinations/:id,updateDestination,valid,200,200,PASS
+tours,GET,/api/tour-packages,getAllTourPackages,no session,401,401,PASS
+tours,GET,/api/tour-packages,getAllTourPackages,valid,200,200,PASS
+tours,GET,/api/tour-packages/:id,getTourPackageById,no session,401,401,PASS
+tours,GET,/api/tour-packages/:id,getTourPackageById,malformed path ID,400,400,PASS
+tours,GET,/api/tour-packages/:id,getTourPackageById,other organization,400/403/404/409,404,PASS
+tours,GET,/api/tour-packages/:id,getTourPackageById,valid,200,200,PASS
+tours,PUT,/api/tour-packages/:id,updateTourPackage,no session,401,401,PASS
+tours,PUT,/api/tour-packages/:id,updateTourPackage,invalid body,400,400,PASS
+tours,PUT,/api/tour-packages/:id,updateTourPackage,malformed path ID,400,400,PASS
+tours,PUT,/api/tour-packages/:id,updateTourPackage,other organization,400/403/404/409,404,PASS
+tours,PUT,/api/tour-packages/:id,updateTourPackage,valid,200,200,PASS
+system,GET,/api/notifications/get-all,getAllNotifications,no session,401,401,PASS
+system,GET,/api/notifications/get-all,getAllNotifications,valid,200,200,PASS
+system,PATCH,/api/notifications/mark-read/:id,markAsRead,no session,401,401,PASS
+system,PATCH,/api/notifications/mark-read/:id,markAsRead,malformed path ID,400,400,PASS
+system,PATCH,/api/notifications/mark-read/:id,markAsRead,other organization,400/403/404/409,404,PASS
+system,PATCH,/api/notifications/mark-read/:id,markAsRead,valid,200,200,PASS
+invoices,DELETE,/api/invoices/:id,deleteInvoice,no session,401,401,PASS
+invoices,DELETE,/api/invoices/:id,deleteInvoice,malformed path ID,400,400,PASS
+invoices,DELETE,/api/invoices/:id,deleteInvoice,other organization,400/403/404/409,404,PASS
+invoices,DELETE,/api/invoices/:id,deleteInvoice,valid,200,200,PASS
+invoices,DELETE,/api/vendor-bills/:id,deleteVendorBill,no session,401,401,PASS
+invoices,DELETE,/api/vendor-bills/:id,deleteVendorBill,malformed path ID,400,400,PASS
+invoices,DELETE,/api/vendor-bills/:id,deleteVendorBill,other organization,400/403/404/409,404,PASS
+invoices,DELETE,/api/vendor-bills/:id,deleteVendorBill,valid,200,200,PASS
+system,DELETE,/api/notifications/:id,deleteNotification,no session,401,401,PASS
+system,DELETE,/api/notifications/:id,deleteNotification,malformed path ID,400,400,PASS
+system,DELETE,/api/notifications/:id,deleteNotification,other organization,400/403/404/409,404,PASS
+system,DELETE,/api/notifications/:id,deleteNotification,valid,200,200,PASS
+tours,DELETE,/api/tour-packages/:id,deleteTourPackage,no session,401,401,PASS
+tours,DELETE,/api/tour-packages/:id,deleteTourPackage,malformed path ID,400,400,PASS
+tours,DELETE,/api/tour-packages/:id,deleteTourPackage,other organization,400/403/404/409,404,PASS
+tours,DELETE,/api/tour-packages/:id,deleteTourPackage,valid,200,200,PASS
+tours,DELETE,/api/destinations/:id,deleteDestination,no session,401,401,PASS
+tours,DELETE,/api/destinations/:id,deleteDestination,malformed path ID,400,400,PASS
+tours,DELETE,/api/destinations/:id,deleteDestination,other organization,400/403/404/409,404,PASS
+tours,DELETE,/api/destinations/:id,deleteDestination,valid,200,200,PASS
+tours,DELETE,/api/cancellation-policies/:id,deleteCancellationPolicy,no session,401,401,PASS
+tours,DELETE,/api/cancellation-policies/:id,deleteCancellationPolicy,malformed path ID,400,400,PASS
+tours,DELETE,/api/cancellation-policies/:id,deleteCancellationPolicy,other organization,400/403/404/409,404,PASS
+tours,DELETE,/api/cancellation-policies/:id,deleteCancellationPolicy,valid,200,200,PASS
+system,DELETE,/api/documents/:id,deleteDocument,no session,401,401,PASS
+system,DELETE,/api/documents/:id,deleteDocument,malformed path ID,400,400,PASS
+system,DELETE,/api/documents/:id,deleteDocument,other organization,400/403/404/409,404,PASS
+system,DELETE,/api/documents/:id,deleteDocument,valid,200,200,PASS
+suppliers,DELETE,/api/suppliers/:id,deleteSupplier,no session,401,401,PASS
+suppliers,DELETE,/api/suppliers/:id,deleteSupplier,malformed path ID,400,400,PASS
+suppliers,DELETE,/api/suppliers/:id,deleteSupplier,other organization,400/403/404/409,404,PASS
+suppliers,DELETE,/api/suppliers/:id,deleteSupplier,valid,200,200,PASS
+suppliers,DELETE,/api/services/:id,deleteBookingService,no session,401,401,PASS
+suppliers,DELETE,/api/services/:id,deleteBookingService,malformed path ID,400,400,PASS
+suppliers,DELETE,/api/services/:id,deleteBookingService,other organization,400/403/404/409,404,PASS
+suppliers,DELETE,/api/services/:id,deleteBookingService,valid,200,200,PASS
+quotations,DELETE,/api/quotations/:id,deleteQuotation,no session,401,401,PASS
+quotations,DELETE,/api/quotations/:id,deleteQuotation,malformed path ID,400,400,PASS
+quotations,DELETE,/api/quotations/:id,deleteQuotation,other organization,400/403/404/409,404,PASS
+quotations,DELETE,/api/quotations/:id,deleteQuotation,valid,200,200,PASS
+users,DELETE,/api/roles/:role_id,delete_roles,no session,401,401,PASS
+users,DELETE,/api/roles/:role_id,delete_roles,malformed path ID,400,400,PASS
+users,DELETE,/api/roles/:role_id,delete_roles,valid,200,200,PASS
+users,DELETE,/api/roles/:role_id,delete_roles,role still assigned,409,409,PASS
+users,DELETE,/api/roles/:role_id,delete_roles,nonexistent role,404,404,PASS
+users,DELETE,/api/permissions/:id,delete_permission,no session,401,401,PASS
+users,DELETE,/api/permissions/:id,delete_permission,malformed path ID,400,400,PASS
+users,DELETE,/api/permissions/:id,delete_permission,valid,200,200,PASS
+users,DELETE,/api/permissions/:id,delete_permission,permission still assigned,409,409,PASS
+users,DELETE,/api/permissions/:id,delete_permission,nonexistent permission,404,404,PASS
+finance,DELETE,/api/expenses/:id,deleteExpense,no session,401,401,PASS
+finance,DELETE,/api/expenses/:id,deleteExpense,malformed path ID,400,400,PASS
+finance,DELETE,/api/expenses/:id,deleteExpense,other organization,400/403/404/409,404,PASS
+finance,DELETE,/api/expenses/:id,deleteExpense,valid,200,200,PASS
+crm,DELETE,/api/tasks/:id,deleteTask,no session,401,401,PASS
+crm,DELETE,/api/tasks/:id,deleteTask,malformed path ID,400,400,PASS
+crm,DELETE,/api/tasks/:id,deleteTask,other organization,400/403/404/409,404,PASS
+crm,DELETE,/api/tasks/:id,deleteTask,valid,200,200,PASS
+crm,DELETE,/api/leads/:id,deleteLead,no session,401,401,PASS
+crm,DELETE,/api/leads/:id,deleteLead,malformed path ID,400,400,PASS
+crm,DELETE,/api/leads/:id,deleteLead,other organization,400/403/404/409,404,PASS
+crm,DELETE,/api/leads/:id,deleteLead,valid,200,200,PASS
+crm,DELETE,/api/enquiries/:id,deleteEnquiry,no session,401,401,PASS
+crm,DELETE,/api/enquiries/:id,deleteEnquiry,malformed path ID,400,400,PASS
+crm,DELETE,/api/enquiries/:id,deleteEnquiry,other organization,400/403/404/409,404,PASS
+crm,DELETE,/api/enquiries/:id,deleteEnquiry,valid,200,200,PASS
+crm,DELETE,/api/customers/:id,deleteCustomer,no session,401,401,PASS
+crm,DELETE,/api/customers/:id,deleteCustomer,malformed path ID,400,400,PASS
+crm,DELETE,/api/customers/:id,deleteCustomer,other organization,400/403/404/409,404,PASS
+crm,DELETE,/api/customers/:id,deleteCustomer,valid,200,200,PASS
+bookings,DELETE,/api/bookings/:id,deleteBooking,no session,401,401,PASS
+bookings,DELETE,/api/bookings/:id,deleteBooking,malformed path ID,400,400,PASS
+bookings,DELETE,/api/bookings/:id,deleteBooking,other organization,400/403/404/409,404,PASS
+bookings,DELETE,/api/bookings/:id,deleteBooking,valid,200,200,PASS
+users,PATCH,/api/users/update/profile,update_user_profile,no session,401,401,PASS
+users,PATCH,/api/users/update/profile,update_user_profile,invalid body,400,400,PASS
+users,PATCH,/api/users/update/profile,update_user_profile,valid,200,200,PASS
+users,POST,/api/users/sent-otp,sent_email_verification_otp,no session,401,401,PASS
+users,POST,/api/users/sent-otp,sent_email_verification_otp,valid,201,201,PASS
+users,POST,/api/users/sent-otp,sent_email_verification_otp,resend cooldown,429,429,PASS
+users,POST,/api/users/verify-otp,verify_user_email,no session,401,401,PASS
+users,POST,/api/users/verify-otp,verify_user_email,invalid body,400,400,PASS
+users,POST,/api/users/verify-otp,verify_user_email,wrong OTP,400,400,PASS
+users,POST,/api/users/verify-otp,verify_user_email,valid,200,200,PASS
+users,POST,/api/users/verify-otp,verify_user_email,reused OTP,400,400,PASS
+users,POST,/api/users/password-reset/send-otp,send_password_reset_otp,invalid body,400,400,PASS
+users,POST,/api/users/password-reset/send-otp,send_password_reset_otp,valid,200,200,PASS
+users,POST,/api/users/password-reset/verify-otp,verify_password_reset_otp,invalid body,400,400,PASS
+users,POST,/api/users/password-reset/verify-otp,verify_password_reset_otp,wrong OTP,400,400,PASS
+users,POST,/api/users/password-reset/verify-otp,verify_password_reset_otp,valid,200,200,PASS
+users,POST,/api/users/password-reset/verify-otp,verify_password_reset_otp,invalid encrypted input,400,400,PASS
+users,POST,/api/users/password-reset/verify-otp,verify_password_reset_otp,expired OTP,400,400,PASS
+users,POST,/api/users/password-reset,reset_user_password,invalid body,400,400,PASS
+users,POST,/api/users/password-reset,reset_user_password,valid,200,200,PASS
+users,POST,/api/users/password-reset,reset_user_password,reused reset token,400,400,PASS
+superAdmin,POST,/api/admin/password-reset/send-otp,send_admin_password_reset_otp,invalid body,400,400,PASS
+superAdmin,POST,/api/admin/password-reset/send-otp,send_admin_password_reset_otp,valid,200,200,PASS
+superAdmin,POST,/api/admin/password-reset/verify-otp,verify_admin_password_reset_otp,invalid body,400,400,PASS
+superAdmin,POST,/api/admin/password-reset/verify-otp,verify_admin_password_reset_otp,wrong OTP,400,400,PASS
+superAdmin,POST,/api/admin/password-reset/verify-otp,verify_admin_password_reset_otp,valid,200,200,PASS
+superAdmin,POST,/api/admin/password-reset/verify-otp,verify_admin_password_reset_otp,expired OTP,400,400,PASS
+superAdmin,POST,/api/admin/password-reset,reset_admin_password,invalid body,400,400,PASS
+superAdmin,POST,/api/admin/password-reset,reset_admin_password,valid,200,200,PASS
+superAdmin,POST,/api/admin/password-reset,reset_admin_password,reused reset token,400,400,PASS
+users,PATCH,/api/users/update/password,update_user_password,no session,401,401,PASS
+users,PATCH,/api/users/update/password,update_user_password,invalid body,400,400,PASS
+users,PATCH,/api/users/update/password,update_user_password,valid,200,200,PASS
+users,PATCH,/api/users/update/emaail,update_email,no session,401,401,PASS
+users,PATCH,/api/users/update/emaail,update_email,invalid body,400,400,PASS
+users,PATCH,/api/users/update/emaail,update_email,valid,200,200,PASS
+superAdmin,PATCH,/api/admin/update/profile,update_admin_profile,no session,401,401,PASS
+superAdmin,PATCH,/api/admin/update/profile,update_admin_profile,invalid body,400,400,PASS
+superAdmin,PATCH,/api/admin/update/profile,update_admin_profile,valid,200,200,PASS
+superAdmin,POST,/api/admin/logout,admin_logout,no session,401,401,PASS
+superAdmin,POST,/api/admin/logout,admin_logout,valid,200,200,PASS
+superAdmin,PATCH,/api/admin/password,update_admin_password,no session,401,401,PASS
+superAdmin,PATCH,/api/admin/password,update_admin_password,invalid body,400,400,PASS
+superAdmin,PATCH,/api/admin/password,update_admin_password,valid,200,200,PASS

@@ -3,19 +3,13 @@ import { pool } from "../../config/db.js";
 export const create_premissions = async (req, res) => {
   const { module, action, description } = req.body;
   try {
-    if (req.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to update branch status.",
-      });
-    }
     if (!module) {
       return res.status(400).json({
         success: false,
         message: "Module is required.",
       });
     }
-    if (!["crm", "finance", "bookings", "etc"].includes(module)) {
+    if (!["crm", "finance", "booking", "etc"].includes(module)) {
       return res.status(400).json({
         success: false,
         message: "Please select a valid module.",
@@ -28,7 +22,7 @@ export const create_premissions = async (req, res) => {
       });
     }
     if (
-      !["create", "read", "update", "delete", "approved", "post"].includes(
+      !["create", "read", "update", "delete", "approve", "post"].includes(
         action,
       )
     ) {
@@ -55,7 +49,7 @@ export const create_premissions = async (req, res) => {
   }
 };
 export const get_permission_by_id = async (req, res) => {
-  const { id } = req.params.permission_id;
+  const { id } = req.params;
   try {
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -69,7 +63,7 @@ export const get_permission_by_id = async (req, res) => {
     }
 
     const permission = await pool.query(
-      `SELECT * FROM permissions WHERE id = $1 RETURING id`,
+      `SELECT * FROM permissions WHERE id = $1`,
       [id],
     );
     if (permission.rowCount === 0) {
@@ -79,8 +73,9 @@ export const get_permission_by_id = async (req, res) => {
       });
     }
     return res.status(200).json({
-      success: false,
+      success: true,
       message: "Permission fetched successfully.",
+      data: permission.rows[0],
     });
   } catch (error) {
     return res.status(500).json({
@@ -91,14 +86,8 @@ export const get_permission_by_id = async (req, res) => {
 };
 
 export const delete_permission = async (req, res) => {
-  const { id } = req.params.permission_id;
+  const { id } = req.params;
   try {
-    if (req.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "You are not authorized to update branch status.",
-      });
-    }
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         id,
@@ -111,20 +100,27 @@ export const delete_permission = async (req, res) => {
     }
 
     const deleted_permission = await pool.query(
-      `DELETE FROM permissions WHERE id = $1 RETURING id`,
+      `DELETE FROM permissions WHERE id = $1 RETURNING id`,
       [id],
     );
     if (deleted_permission.rowCount === 0) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "There is a error while deleting permossions.",
+        message: "Permission not found.",
       });
     }
     return res.status(200).json({
-      success: false,
+      success: true,
       message: "Permission deleted successfully.",
     });
   } catch (error) {
+    if (error.code === "23503") {
+      return res.status(409).json({
+        success: false,
+        message: "Permission is still assigned to a role.",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "Internal server error.",

@@ -1,32 +1,20 @@
-import jwt from "jsonwebtoken";
 import { pool } from "../config/db.js";
+import { read_session, session_version } from "../utils/session.js";
 
 export const adminRouteProtector = async (req, res, next) => {
-  const authorization = req.headers.authorization;
-  const bearerToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-  const token = req.cookies?.token || bearerToken;
+  const session = read_session(req, "admin");
 
-  if (!token) {
-    return res
-      .status(401)
-      .json({ message: "no token provided", success: false });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (!decoded) {
-      return res.status(401).json({
-        message: "Unauthorized access for this action",
-        success: false,
-      });
+  if (session) {
+    const { rows } = await pool.query(
+      "SELECT id, email, user_name, password_hash FROM super_admins WHERE id = $1",
+      [session.sub],
+    );
+    const admin = rows[0];
+    if (admin && session.version === session_version(admin.password_hash, admin.email)) {
+      req.admin = { id: admin.id, email: admin.email, user_name: admin.user_name };
+      return next();
     }
-    
-    req.admin = decoded;
-
-    next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized access", success: false });
-    return next(error);
   }
+
+  return res.status(401).json({ message: "Unauthorized access", success: false });
 };

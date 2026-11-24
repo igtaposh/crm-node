@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS branches (
     is_head_office BOOLEAN NOT NULL DEFAULT false,
     status branch_status NOT NULL DEFAULT 'active',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-S
     CONSTRAINT unique_branch_code_per_organization
         UNIQUE (organization_id, branch_code),
     CONSTRAINT branch_gstin_format

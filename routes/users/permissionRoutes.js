@@ -5,11 +5,12 @@ import {
   get_permission_by_id,
 } from "../../controllers/users/permissionController.js";
 import { userRouteProtector } from "../../middlewares/userRouteProtector.js";
+import { adminRouteProtector } from "../../middlewares/adminRouteProtector.js";
 
 const router = Router();
 
-router.post("/", userRouteProtector, create_premissions);
+router.post("/", adminRouteProtector, create_premissions);
 router.get("/:id", userRouteProtector, get_permission_by_id);
-router.delete("/:id", userRouteProtector, delete_permission);
+router.delete("/:id", adminRouteProtector, delete_permission);
 
 export default router;

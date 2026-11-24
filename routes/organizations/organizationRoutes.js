@@ -4,7 +4,7 @@ import {
   create_organization,
   get_all_organizations,
   get_organizatins_by_id,
-  getOrganizatinsById,
+  update_organization_status,
   request_organization_update,
 } from "../../controllers/organizations/organizationController.js";
 import { adminRouteProtector } from "../../middlewares/adminRouteProtector.js";
@@ -14,14 +14,14 @@ const router = Router();
 router.post("/", adminRouteProtector, create_organization);
 router.get("/", adminRouteProtector, get_all_organizations);
 router.patch(
-  "/update/request/accept",
+  "/update/request/accept{/:id}",
   adminRouteProtector,
   accept_organization_update,
 );
 router.patch(
   "/update/status/:id",
   adminRouteProtector,
-  accept_organization_update,
+  update_organization_status,
 );
 router.get("/me", userRouteProtector, get_organizatins_by_id);
 

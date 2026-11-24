@@ -12,7 +12,7 @@ export const create_organization = async (req, res) => {
     pan,
     currency,
     timezone,
-  } = req.body;
+  } = req.body || {};
 
   const currencyValue = currency ?? "INR";
   const timezoneValue = timezone ?? "Asia/Kolkata";
@@ -114,7 +114,7 @@ export const get_all_organizations = async (req, res) => {
     const result = await pool.query(`
       SELECT * FROM organizations
       `);
-    if (result.length <= 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: "No organization found.",
@@ -134,7 +134,7 @@ export const get_all_organizations = async (req, res) => {
 };
 
 export const accept_organization_update = async (req, res) => {
-  const request_id = req.params.id;
+  const request_id = req.params.id || req.body?.request_id;
 
   try {
     if (
@@ -149,110 +149,102 @@ export const accept_organization_update = async (req, res) => {
       });
     }
 
-    const requestResult = await pool.query(
-      `SELECT * FROM organization_update_requests WHERE id = $1 AND status = 'pending'`,
-      [request_id],
-    );
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const requestResult = await client.query(
+        `SELECT * FROM organization_update_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
+        [request_id],
+      );
 
-    if (requestResult.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Pending update request not found.",
+      if (requestResult.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({
+          success: false,
+          message: "Pending update request not found.",
+        });
+      }
+
+      const { organization_id, requested_data } = requestResult.rows[0];
+
+      const {
+        legal_name,
+        name,
+        email,
+        slug,
+        phone,
+        website,
+        gstin,
+        pan,
+        currency,
+        timezone,
+      } = requested_data;
+
+      const updateResult = await client.query(
+        `UPDATE organizations SET
+          legal_name = COALESCE($1, legal_name),
+          name = COALESCE($2, name),
+          slug = COALESCE($3, slug),
+          email = COALESCE($4, email),
+          phone = COALESCE($5, phone),
+          website = COALESCE($6, website),
+          gstin = COALESCE($7, gstin),
+          pan = COALESCE($8, pan),
+          currency = COALESCE($9, currency),
+          timezone = COALESCE($10, timezone),
+          updated_at = NOW()
+         WHERE id = $11 RETURNING *`,
+        [
+          legal_name ?? null,
+          name ?? null,
+          slug ?? null,
+          email ?? null,
+          phone ?? null,
+          website ?? null,
+          gstin ?? null,
+          pan ?? null,
+          currency ?? null,
+          timezone ?? null,
+          organization_id,
+        ],
+      );
+
+      await client.query(
+        `UPDATE organization_update_requests
+         SET status = 'accepted', updated_at = NOW() WHERE id = $1`,
+        [request_id],
+      );
+
+      await client.query("COMMIT");
+      return res.status(200).json({
+        success: true,
+        message: "Organization details updated successfully.",
+        data: updateResult.rows[0],
       });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const { organization_id, requested_data } = requestResult.rows[0];
-
-    const {
-      legal_name,
-      name,
-      email,
-      slug,
-      phone,
-      website,
-      gstin,
-      pan,
-      currency,
-      timezone,
-    } = requested_data;
-
-    const organizationResult = await pool.query(
-      `SELECT name, slug FROM organizations WHERE id = $1`,
-      [organization_id],
-    );
-
-    if (organizationResult.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Organization not found.",
-      });
-    }
-
-    const updateResult = await pool.query(
-      `UPDATE organizations SET
-        legal_name = COALESCE($1, legal_name),
-        name = COALESCE($2, name),
-        slug = COALESCE($3, name),
-        email = COALESCE($4, email),
-        phone = COALESCE($5, phone),
-        website = COALESCE($6, website),
-        gstin = COALESCE($7, gstin),
-        pan = COALESCE($8, pan),
-        currency = COALESCE($9, currency),
-        timezone = COALESCE($10, timezone),
-        updated_at = NOW()
-       WHERE id = $11 RETURNING *`,
-      [
-        legal_name ?? null,
-        name ?? null,
-        slug ?? null,
-        email ?? null,
-        phone ?? null,
-        website ?? null,
-        gstin ?? null,
-        pan ?? null,
-        currency ?? null,
-        timezone ?? null,
-        organization_id,
-      ],
-    );
-
-    await pool.query(
-      `UPDATE organization_update_requests
-       SET status = 'accepted', updated_at = NOW() WHERE id = $1`,
-      [request_id],
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "Organization details updated successfully.",
-      data: updateResult.rows[0],
-    });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
-  } finally {
-    if (pool) {
-      pool.release();
-    }
+    return res.status(500).json({ success: false, message: "Internal server error." });
   }
 };
 
 export const update_organization_status = async (req, res) => {
-  const organizatin_id = req.params.id;
-  const { status } = req.body;
+  const organization_id = req.params.id;
+  const { status } = req.body || {};
   try {
     if (
-      !organizatin_id ||
+      !organization_id ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        organizatin_id,
+        organization_id,
       )
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid organizatin ID.",
+        message: "Invalid organization ID.",
       });
     }
     if (!["active", "inactive", "suspended"].includes(status)) {
@@ -264,7 +256,7 @@ export const update_organization_status = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE organizations SET status = $1 WHERE id = $2 AND status != $3 RETURNING status`,
-      [status, organizatin_id, status],
+      [status, organization_id, status],
     );
     if (result.rowCount === 0) {
       return res.status(400).json({
@@ -272,10 +264,6 @@ export const update_organization_status = async (req, res) => {
         message: "Status updatation failed please try again later.",
       });
     }
-    await pool.query(
-      `UPDATE users SET status = $1 WHERE organization_id = $2 AND status != $3 RETURNING id`,
-      [status, organizatin_id, status],
-    );
     return res.status(200).json({
       success: true,
       message: "Organization status updated successfully.",
@@ -291,7 +279,7 @@ export const update_organization_status = async (req, res) => {
 // for users
 
 export const get_organizatins_by_id = async (req, res) => {
-  const id = req.user.organizatin_id;
+  const id = req.user.organization_id;
   try {
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -309,7 +297,7 @@ export const get_organizatins_by_id = async (req, res) => {
       `,
       [id],
     );
-    if (result.length <= 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
         message: "No organization found with this ID.",
@@ -341,7 +329,7 @@ export const request_organization_update = async (req, res) => {
     pan,
     currency,
     timezone,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (req.role !== "admin") {
@@ -377,7 +365,7 @@ export const request_organization_update = async (req, res) => {
         });
       }
 
-      requestedData.legal_name = legal_name.trim();
+      Object.assign(requestedData, { legal_name: legal_name.trim() });
     }
 
     if (name != null) {
@@ -388,8 +376,8 @@ export const request_organization_update = async (req, res) => {
         });
       }
       const slug = await generateUniqueSlug(name);
-      requestedData.name = name.trim();
-      requestedData.slug = slug;
+      Object.assign(requestedData, { name: name.trim() });
+      Object.assign(requestedData, { slug: slug });
     }
 
     if (email != null) {
@@ -403,7 +391,7 @@ export const request_organization_update = async (req, res) => {
         });
       }
 
-      requestedData.email = email.trim().toLowerCase();
+      Object.assign(requestedData, { email: email.trim().toLowerCase() });
     }
 
     if (phone != null) {
@@ -414,7 +402,7 @@ export const request_organization_update = async (req, res) => {
         });
       }
 
-      requestedData.phone = phone;
+      Object.assign(requestedData, { phone: phone });
     }
 
     if (pan != null) {
@@ -425,7 +413,7 @@ export const request_organization_update = async (req, res) => {
         });
       }
 
-      requestedData.pan = pan;
+      Object.assign(requestedData, { pan: pan });
     }
 
     if (gstin != null) {
@@ -439,7 +427,7 @@ export const request_organization_update = async (req, res) => {
         });
       }
 
-      requestedData.gstin = gstin;
+      Object.assign(requestedData, { gstin: gstin });
     }
 
     if (currency != null) {
@@ -450,7 +438,7 @@ export const request_organization_update = async (req, res) => {
         });
       }
 
-      requestedData.currency = currency;
+      Object.assign(requestedData, { currency: currency });
     }
 
     if (website != null) {
@@ -465,7 +453,7 @@ export const request_organization_update = async (req, res) => {
           throw new Error("Invalid protocol.");
         }
 
-        requestedData.website = website.trim();
+        Object.assign(requestedData, { website: website.trim() });
       } catch {
         return res.status(400).json({
           success: false,
@@ -484,7 +472,7 @@ export const request_organization_update = async (req, res) => {
           timeZone: timezone,
         });
 
-        requestedData.timezone = timezone;
+        Object.assign(requestedData, { timezone: timezone });
       } catch {
         return res.status(400).json({
           success: false,

@@ -1,11 +1,10 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const createDocument = async (req, res) => {
   const {
-    organization_id,
     entity_type,
     entity_id,
     document_type,
@@ -13,14 +12,13 @@ export const createDocument = async (req, res) => {
     storage_key,
     mime_type,
     file_size,
-    uploaded_by,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
-  const uploaderId = uploaded_by || req.user?.id;
+  const uploaderId = req.user.id;
 
   try {
     if (
-      !organization_id ||
       !entity_type ||
       !entity_id ||
       !file_name ||
@@ -29,14 +27,7 @@ export const createDocument = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, entity_type, entity_id, file_name, and storage_key are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "entity_type, entity_id, file_name, and storage_key are required.",
       });
     }
 
@@ -78,30 +69,19 @@ export const createDocument = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllDocuments = async (req, res) => {
-  const { organization_id, entity_type, entity_id } = req.query;
+  const { entity_type, entity_id } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM documents WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (entity_type) {
       params.push(entity_type);
@@ -128,11 +108,7 @@ export const getAllDocuments = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -146,9 +122,10 @@ export const getDocumentById = async (req, res) => {
       });
     }
 
-    const result = await pool.query(`SELECT * FROM documents WHERE id = $1`, [
+    const result = await pool.query(`SELECT * FROM documents WHERE id = $1 AND organization_id = $2`, [
       id,
-    ]);
+        req.user.organization_id,
+      ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -163,11 +140,7 @@ export const getDocumentById = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -182,8 +155,8 @@ export const deleteDocument = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM documents WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM documents WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -198,10 +171,6 @@ export const deleteDocument = async (req, res) => {
       message: "Document deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

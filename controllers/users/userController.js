@@ -1,10 +1,10 @@
 import { pool } from "../../config/db.js";
 import bcrypt from "bcryptjs";
-import { randomInt } from "node:crypto";
+import { issue_account_challenge, verify_account_challenge } from "../../utils/account_challenge.js";
 import { sent_otp_for_email_verify } from "../../utils/sent_otp_for_email_verify.js";
-import jwt from "jsonwebtoken";
+import { sign_session } from "../../utils/session.js";
 
-export const create_user = async (req, res) => {
+const create_account = async (req, res, is_admin) => {
   const {
     branch_id,
     name,
@@ -14,17 +14,17 @@ export const create_user = async (req, res) => {
     employee_code,
     designation,
     role_id,
-  } = req.body;
-  const organization_id = req.user.organization_id;
+  } = req.body || {};
+  const organization_id = is_admin ? req.body?.organization_id : req.user.organization_id;
 
   try {
-    if (req.role !== "admin") {
+    if (!is_admin && req.role !== "admin") {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to update branch status.",
+        message: "You are not authorized to create users.",
       });
     }
-    if (!organization_id || !name || !email || !password_hash || !role_id) {
+    if (!organization_id || !name || !email || !password_hash || (!is_admin && !role_id)) {
       return res.status(400).json({
         success: false,
         message: "Please provide all required fields.",
@@ -54,7 +54,7 @@ export const create_user = async (req, res) => {
       }
     }
 
-    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+    if (typeof email !== "string" || email.length > 255 || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
       return res.status(400).json({
         success: false,
         message: "Please enter valid email.",
@@ -69,7 +69,7 @@ export const create_user = async (req, res) => {
         });
       }
     }
-    if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password_hash)) {
+    if (typeof password_hash !== "string" || Buffer.byteLength(password_hash, "utf8") > 72 || !/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password_hash)) {
       return res.status(400).json({
         success: false,
         message:
@@ -77,7 +77,7 @@ export const create_user = async (req, res) => {
       });
     }
     if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      !is_admin && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         role_id,
       )
     ) {
@@ -87,477 +87,162 @@ export const create_user = async (req, res) => {
       });
     }
 
-    const existing = await pool.query(
-      `SELECT id FROM users WHERE email = $1 AND organization_id = $2`,
-      [email, organization_id],
-    );
+    const email_address = email.toLowerCase();
+    const hashed_password = await bcrypt.hash(password_hash, Number(process.env.SALT_ROUNDS));
+    const client = await pool.connect();
 
-    if (existing.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Email ID is already in use, Please use an different Email.",
-      });
-    }
-
-    const hashed_password = await bcrypt.hash(
-      password_hash,
-      parseInt(process.env.SALT_ROUNDS),
-    );
-
-    const result = await pool.query(
-      `INSERT INTO users
-        (organization_id, branch_id, name, email, phone, password_hash, employee_code, designation)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING *`,
-      [
-        organization_id,
-        branch_id,
-        name,
-        email,
-        phone,
-        hashed_password,
-        employee_code,
-        designation,
-      ],
-    );
-
-    await pool.query(
-      `INSERT INTO check_user_email
-        (user_id, is_verified)
-        VALUES ($1, $2)
-        RETURNING *`,
-      [result.rows[0].id, false],
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: "User created successfully. Please Verify user email.",
-      data: result.rows[0],
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
-  }
-};
-export const create_admin_user = async (req, res) => {
-  const { name, email, phone, password_hash, employee_code, designation } =
-    req.body;
-  const { organization_id } = req.params;
-
-  try {
-    if (!organization_id || !name || !email || !password_hash) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide all required fields.",
-      });
-    }
-
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        organization_id,
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
-      });
-    }
-
-    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter valid email.",
-      });
-    }
-
-    if (phone) {
-      if (!/^[6-9]\d{9}$/.test(phone)) {
-        return res.status(400).json({
-          success: false,
-          message: "Please enter valid phone.",
-        });
-      }
-    }
-    if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password_hash)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must contain at least 8 characters, one uppercase letter, one number and one special character.",
-      });
-    }
-
-    const existing = await pool.query(`SELECT id FROM users WHERE email = $1`, [
-      email,
-    ]);
-
-    if (existing.rows.length !== 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Email ID is already in use, Please use an different Email.",
-      });
-    }
-    const salt_rounds = Number(process.env.SALT_ROUNDS);
-    const hashed_password = await bcrypt.hash(password_hash, salt_rounds);
-
-    const result = await pool.query(
-      `INSERT INTO users
-        (organization_id, branch_id, name, email, phone, password_hash, employee_code, designation, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING *`,
-      [
-        organization_id,
-        name,
-        email,
-        phone,
-        hashed_password,
-        employee_code,
-        designation,
-      ],
-    );
-
-    if (result.rowCount !== 0) {
-      await pool.query(
-        `INSERT INTO check_user_email (user_id, is_verified) VALUES ($1, $2) RETURNING *`,
-        [result.rows[0].id, true],
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [email_address]);
+      const existing = await client.query(
+        "SELECT id FROM users WHERE LOWER(email) = $1",
+        [email_address],
       );
-      const roleResult = await pool.query(
-        `INSERT INTO roles (organization_id, name) VALUES ($1, $2) RETURNING *`,
-        [organization_id, "admin"],
-      );
-      await pool.query(
-        `INSERT INTO user_role (user_id, role_id) VALUES ($1, $2) RETURNING *`,
-        [result.rows[0].id, roleResult.rows[0].id],
-      );
-
-      const modules = ["crm", "finance", "bookings", "etc"];
-
-      const actions = ["create", "read", "update", "delete", "approve", "post"];
-
-      const values = [];
-      const placeholders = [];
-
-      let index = 1;
-
-      for (const module of modules) {
-        for (const action of actions) {
-          placeholders.push(`($${index++}, $${index++}, $${index++})`);
-
-          values.push(module, action, `${action} permission for ${module}`);
-        }
+      if (existing.rowCount > 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ success: false, message: "Email is already in use." });
       }
 
-      const permissionResult = await pool.query(
-        `INSERT INTO permissions (module, action, description) VALUES ${placeholders.join(", ")} ON CONFLICT (module, action) DO NOTHING RETURNING *`,
-        values,
-      );
-      await pool.query(
-        `INSERT INTO role_permissions (role_id, permissions_id) VALUES ($1, $2) RETURNING *`,
-        [roleResult.rows[0].id, permissionResult.rows[0].id],
-      );
-    }
+      const role = is_admin
+        ? await client.query(
+            `INSERT INTO roles (organization_id, name) VALUES ($1, 'admin')
+             ON CONFLICT (organization_id, name) DO UPDATE SET name = EXCLUDED.name
+             RETURNING id`,
+            [organization_id],
+          )
+        : await client.query(
+            "SELECT id FROM roles WHERE organization_id = $1 AND id = $2",
+            [organization_id, role_id],
+          );
+      if (role.rowCount !== 1) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ success: false, message: "Invalid role for this organization." });
+      }
 
-    return res.status(201).json({
-      success: true,
-      message: "Admin created successfully.",
-      data: result.rows[0],
-    });
+      const result = await client.query(
+        `INSERT INTO users
+           (organization_id, branch_id, name, email, phone, password_hash, employee_code, designation)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, organization_id, branch_id, name, email, phone, employee_code, designation, status`,
+        [organization_id, branch_id || null, name, email_address, phone || null,
+          hashed_password, employee_code || null, designation || null],
+      );
+      const user = result.rows[0];
+      await client.query(
+        "INSERT INTO check_user_email (user_id, is_verified) VALUES ($1, FALSE)",
+        [user.id],
+      );
+      await client.query("INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)", [
+        user.id, role.rows[0].id,
+      ]);
+      await client.query("COMMIT");
+
+      return res.status(201).json({
+        success: true,
+        message: is_admin
+          ? "Admin created successfully. Please verify your email."
+          : "User created successfully. Please verify your email.",
+        data: user,
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
+    if (error.code === "23503") {
+      return res.status(400).json({ success: false, message: "Invalid organization or branch." });
+    }
+    if (error.code === "23505") {
+      return res.status(409).json({ success: false, message: "Email is already in use." });
+    }
+    return res.status(500).json({ success: false, message: "Internal server error." });
   }
 };
+
+export const create_user = (req, res) => create_account(req, res, false);
+export const create_admin_user = (req, res) => create_account(req, res, true);
+
 export const sent_email_verification_otp = async (req, res) => {
-  const { user_id } = req.body;
-  try {
-    if (!user_id) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID.",
-      });
-    }
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        user_id,
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID.",
-      });
-    }
-    const user_otp = await pool.query(
-      `SELECT * FROM user_otp WHERE user_id = $1`,
-      [user_id],
-    );
-
-    if (user_otp.rows.length > 0) {
-      await pool.query(`DELETE FROM user_otp WHERE user_id = $1`, [user_id]);
-    }
-
-    const user = await pool.query(`SELECT * FROM users WHERE id = $1`, [
-      user_id,
-    ]);
-    if (user.rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "User not found.",
-      });
-    }
-    const organization = await pool.query(
-      `SELECT * FROM organizations WHERE id = $1`,
-      [user.rows[0].organization_id],
-    );
-    if (!organization) {
-      return res.status(400).json({
-        success: false,
-        message: "Organization not found.",
-      });
-    }
-
-    const otp = randomInt(100000, 1000000).toString();
-    const salt_rounds = Number(process.env.SALT_ROUNDS);
-    const hashed_otp = await bcrypt.hash(otp, salt_rounds);
-
-    const result = await pool.query(
-      `INSERT INTO user_otp (user_id, otp, expires_at)
-        VALUES ($1, $2, NOW() + INTERVAL '10 minutes')
-        RETURNING *`,
-      [user_id, hashed_otp],
-    );
-
-    await sent_otp_for_email_verify(user.rows[0], otp, organization.rows[0]);
-
-    return res.status(201).json({
-      success: true,
-      message: "An 6 digit OTP has been sent to your email.",
-      data: result.rows[0],
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
+  const user = req.user;
+  const result = await pool.query(
+    `SELECT o.name FROM organizations o
+     WHERE o.id = $1
+       AND NOT EXISTS (SELECT 1 FROM check_user_email WHERE user_id = $2 AND is_verified)`,
+    [user.organization_id, user.id],
+  );
+  if (!result.rowCount) {
+    return res.status(409).json({ success: false, message: "User email is already verified." });
   }
+
+  const otp = await issue_account_challenge("verify_email", user);
+  if (!otp) {
+    return res.status(429).json({ success: false, message: "Please wait before requesting another code." });
+  }
+  await sent_otp_for_email_verify(user, otp, result.rows[0]);
+
+  return res.status(201).json({ success: true, message: "A 6 digit OTP has been sent to your email." });
 };
 
 export const verify_user_email = async (req, res) => {
-  const { user_id, otp } = req.body;
-  try {
-    if (!user_id) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID.",
-      });
-    }
-    if (!otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP.",
-      });
-    }
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        user_id,
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid user ID.",
-      });
-    }
-    if (!/^\d{6}$/.test(String(otp))) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid 6 digit OTP.",
-      });
-    }
-    const check_user_email = await pool.query(
-      `SELECT is_verified FROM check_user_email WHERE user_id = $1`,
-      [user_id],
-    );
-    if (check_user_email.rows.is_verfied) {
-      return res.status(400).json({
-        success: false,
-        message: "User email is already verified.",
-      });
-    }
-    const user = await pool.query(`SELECT id FROM users WHERE id = $1`, [
-      user_id,
-    ]);
-    if (user.rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "User not found.",
-      });
-    }
-    const user_otp = await pool.query(
-      `SELECT otp FROM user_otp WHERE user_id = $1 AND expires_at > NOW()`,
-      [user_id],
-    );
-
-    const is_match = await bcrypt.compare(otp, user_otp.rows[0].otp);
-    if (!is_match) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or Expired OTP.",
-      });
-    }
-    await pool.query(`DELETE FROM user_otp WHERE user_id = $1`, [user_id]);
-
-    const updated_verification = await pool.query(
-      `UPDATE check_user_email SET is_verified = TRUE WHERE user_id = $1`,
-      [user_id],
-    );
-    if (updated_verification.rowCount !== 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Email verification failed.",
-      });
-    }
-    return res.status(200).json({
-      success: true,
-      message: "OTP has been verified successfully.",
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
+  const { otp } = req.body || {};
+  const user = req.user;
+  if (typeof otp !== "string" || !/^\d{6}$/.test(otp)) {
+    return res.status(400).json({ success: false, message: "Invalid 6 digit OTP." });
   }
+
+  const result = await verify_account_challenge("verify_email", user, otp);
+  if (!result.rows[0]?.verified) {
+    return res.status(400).json({ success: false, message: "Invalid or expired OTP." });
+  }
+
+  const verification = await pool.query(
+    `WITH account AS (
+       SELECT id FROM users WHERE id = $1 AND email = $2 FOR UPDATE
+     )
+     UPDATE check_user_email SET is_verified = TRUE WHERE user_id IN (SELECT id FROM account)`,
+    [user.id, user.email],
+  );
+  if (!verification.rowCount) {
+    return res.status(409).json({ success: false, message: "Email changed or verification is unavailable." });
+  }
+
+  return res.status(200).json({ success: true, message: "OTP has been verified successfully." });
 };
 
 export const user_login = async (req, res) => {
-  const { email, password_hash } = req.body;
+  const { email, password_hash } = req.body || {};
   try {
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "invaild Email ID.",
-      });
-    }
-    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter valid email.",
-      });
-    }
-    if (!password_hash) {
-      return res.status(400).json({
-        success: false,
-        message: "Invaild password.",
-      });
+    if (
+      typeof email !== "string" || email.length > 255 ||
+      !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email) ||
+      typeof password_hash !== "string" || !password_hash ||
+      Buffer.byteLength(password_hash, "utf8") > 72
+    ) {
+      return res.status(400).json({ success: false, message: "Invalid email or password." });
     }
 
-    const existing_user = await pool.query(
-      `SELECT * FROM users WHERE email = $1`,
+    const result = await pool.query(
+      `SELECT u.id, u.email, u.password_hash, u.status, o.status AS organization_status, b.status AS branch_status, u.branch_id,
+              EXISTS (SELECT 1 FROM check_user_email e
+                      WHERE e.user_id = u.id AND e.is_verified) AS is_verified
+       FROM users u JOIN organizations o ON o.id = u.organization_id
+       LEFT JOIN branches b ON b.id = u.branch_id AND b.organization_id = u.organization_id
+       WHERE LOWER(u.email) = LOWER($1)
+       LIMIT 2`,
       [email],
     );
-    const organization = await pool.query(
-      `SELECT status FROM organizations WHERE id = $1`,
-      [existing_user.rows[0].organization_id],
-    );
-    if (organization.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invaild organization.",
-      });
+    const user = result.rows[0];
+    if (result.rowCount !== 1 || !(await bcrypt.compare(password_hash, user.password_hash))) {
+      return res.status(401).json({ success: false, message: "Invalid email or password." });
     }
-    if (existing_user.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invaild user credintials.",
-      });
-    }
-    if (
-      existing_user.rows[0].status != "inactive" ||
-      existing_user.rows[0].status != "suspended"
-    ) {
-      return res.status(403).json({
-        message: "Account is inactive or suspended",
-        success: false,
-      });
-    }
-    const user_password = existing_user.rows[0].password_hash;
-    const is_correct_password = await bcrypt.compare(
-      password_hash,
-      user_password,
-    );
-
-    if (!is_correct_password) {
-      return res.status(400).json({
-        success: false,
-        message: "Invaild Email or Password.",
-      });
+    if (user.status !== "active" || user.organization_status !== "active" || (user.branch_id && user.branch_status !== "active")) {
+      return res.status(403).json({ success: false, message: "Account or organization is inactive." });
     }
 
-    const check_user_email = await pool.query(
-      `SELECT is_verified FROM check_user_email WHERE user_id = $1`,
-      [existing_user.rows[0].id],
-    );
-
-    if (!check_user_email.rows[0].is_verified) {
-      return res.status(403).json({
-        success: false,
-        message: "Please verify your email first.",
-      });
-    }
-    const user_roles = await pool.query(
-      `SELECT role_id FROM user_roles WHERE user_id = $1`,
-      [existing_user.rows[0].id],
-    );
-    if (user_roles.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "User role has invalid role type.",
-      });
-    }
-    const roles = await pool.query(`SELECT name FROM roles WHERE id = $1`, [
-      user_roles.rows[0].role_id,
-    ]);
-    if (roles.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid role.",
-      });
-    }
-    const role_permissions = await pool.query(
-      `SELECT permission_id FROM role_permissions WHERE role_id = $1`,
-      [user_roles.rows[0].role_id],
-    );
-    if (role_permissions.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid role permission.",
-      });
-    }
-    const permissions = await pool.query(
-      `SELECT module, action FROM permissions WHERE id = $1`,
-      [role_permissions.rows[0].permission_id],
-    );
-    if (permissions.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid permission.",
-      });
-    }
-    await pool.query(`UPDATE users SET last_login_at = NOW () WHERE id = $1`, [
-      existing_user.rows[0].id,
-    ]);
-    const token = jwt.sign(
-      {
-        user: existing_user.rows[0],
-        role: roles.rows[0].name,
-        isEmailVerified: check_user_email.rows[0].is_verfied,
-        permissions: permissions.rows[0],
-        organization: organization.rows[0].status,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" },
-    );
+    await pool.query("UPDATE users SET last_login_at = NOW() WHERE id = $1", [user.id]);
+    const token = sign_session("user", user);
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -567,6 +252,7 @@ export const user_login = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "User authenticated successfully.",
+      is_email_verified: user.is_verified,
     });
   } catch (error) {
     return res.status(500).json({
@@ -626,10 +312,8 @@ export const update_user_password = async (req, res) => {
       [user_id],
     );
 
-    const is_match = await bcrypt.compare(
-      old_password,
-      user_password.rows[0].password_hash,
-    );
+    const current_password_hash = user_password.rows[0]?.password_hash;
+    const is_match = current_password_hash && await bcrypt.compare(old_password, current_password_hash);
 
     if (!is_match) {
       return res.status(401).json({
@@ -644,8 +328,8 @@ export const update_user_password = async (req, res) => {
     const updated_user = await pool.query(
       `UPDATE users
        SET password_hash = $1, updated_at = NOW()
-       WHERE id = $2 AND status = 'active'`,
-      [hashed_password, user_id],
+       WHERE id = $2 AND status = 'active' AND password_hash = $3`,
+      [hashed_password, user_id, current_password_hash],
     );
 
     if (updated_user.rowCount === 0) {
@@ -813,89 +497,60 @@ export const update_user_profile = async (req, res) => {
 };
 
 export const update_email = async (req, res) => {
-  const user_id = req.user?.id;
-  const { new_email } = req.body || {};
+  const { new_email, password } = req.body || {};
+  const user = req.user;
+  const email = typeof new_email === "string" ? new_email.trim().toLowerCase() : "";
 
+  if (email.length > 255 || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+    return res.status(400).json({ success: false, message: "Please provide a valid new email address." });
+  }
+  if (email === user.email.toLowerCase()) {
+    return res.status(400).json({ success: false, message: "New email must be different from the current email." });
+  }
+  if (typeof password !== "string" || !password || Buffer.byteLength(password, "utf8") > 72) {
+    return res.status(400).json({ success: false, message: "Current password is required." });
+  }
+
+  const account = await pool.query("SELECT password_hash FROM users WHERE id = $1", [user.id]);
+  const hash = account.rows[0]?.password_hash;
+  if (!hash || !(await bcrypt.compare(password, hash))) {
+    return res.status(403).json({ success: false, message: "Current password is incorrect." });
+  }
+
+  const client = await pool.connect();
   try {
-    if (
-      typeof user_id !== "string" ||
-      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(user_id)
-    ) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized access.",
-      });
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [email]);
+    const existing = await client.query("SELECT id FROM users WHERE LOWER(email) = $1", [email]);
+    if (existing.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ success: false, message: "Email is already in use." });
     }
-
-    const email = typeof new_email === "string" ? new_email.trim() : "";
-
-    if (
-      email.length > 255 ||
-      !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid new email address.",
-      });
-    }
-
-    const user = await pool.query(
-      `SELECT email FROM users WHERE id = $1 AND status = 'active' FOR UPDATE`,
-      [user_id],
+    const updated = await client.query(
+      `UPDATE users SET email = $1, updated_at = NOW()
+       WHERE id = $2 AND email = $3 AND password_hash = $4 AND status = 'active'`,
+      [email, user.id, user.email, hash],
     );
-
-    if (user.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Active user not found.",
-      });
+    if (!updated.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ success: false, message: "Account changed during the request." });
     }
-
-    if (user.rows[0].email.toLowerCase() === email.toLowerCase()) {
-      return res.status(400).json({
-        success: false,
-        message: "New email must be different from the current email.",
-      });
-    }
-    const existing_new_email = await pool.query(
-      `SELECT email FROM users WHERE id = $2`,
-      [email, user_id],
+    const verification = await client.query(
+      "UPDATE check_user_email SET is_verified = FALSE WHERE user_id = $1",
+      [user.id],
     );
-    if (existing_new_email.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "This email is already associated with another account.",
-      });
+    if (!verification.rowCount) {
+      await client.query("INSERT INTO check_user_email (user_id, is_verified) VALUES ($1, FALSE)", [user.id]);
     }
-    const updated_email = await pool.query(
-      `UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [email, user_id],
-    );
-    if (updated_email.rowCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Update failed.",
-      });
-    }
-    const verification = await pool.query(
-      `UPDATE check_user_email SET is_verified = FALSE WHERE user_id = $1`,
-      [user_id],
-    );
-
-    if (verification.rowCount === 0) {
-      await pool.query(
-        `INSERT INTO check_user_email (user_id, is_verified) VALUES ($1, FALSE)`,
-        [user_id],
-      );
-    }
+    await client.query("COMMIT");
     return res.status(200).json({
       success: true,
-      message: "Email updated successfully. Please verify your new email.",
+      message: "Email updated successfully. Sign in again to verify your new email.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 };

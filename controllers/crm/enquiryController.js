@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -6,7 +6,6 @@ const ENQUIRY_STATUSES = ["open", "qouted", "converted", "closed"];
 
 export const createEnquiry = async (req, res) => {
   const {
-    organization_id,
     lead_id,
     customer_id,
     assigned_to,
@@ -22,11 +21,11 @@ export const createEnquiry = async (req, res) => {
     hotel_required,
     special_requirements,
     status,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (
-      !organization_id ||
       !enquiry_number ||
       adults === undefined ||
       children === undefined ||
@@ -37,14 +36,7 @@ export const createEnquiry = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, enquiry_number, adults, children, infants, transport_required, and hotel_required are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "enquiry_number, adults, children, infants, transport_required, and hotel_required are required.",
       });
     }
 
@@ -125,8 +117,8 @@ export const createEnquiry = async (req, res) => {
         children,
         infants,
         budget || null,
-        Boolean(transport_required),
-        Boolean(hotel_required),
+        transport_required ?? false,
+        hotel_required ?? false,
         special_requirements || null,
         statusValue,
       ],
@@ -138,30 +130,19 @@ export const createEnquiry = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllEnquiries = async (req, res) => {
-  const { organization_id, status } = req.query;
+  const { status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM enquiries WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (status) {
       params.push(status);
@@ -177,11 +158,7 @@ export const getAllEnquiries = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -195,9 +172,10 @@ export const getEnquiryById = async (req, res) => {
       });
     }
 
-    const result = await pool.query(`SELECT * FROM enquiries WHERE id = $1`, [
+    const result = await pool.query(`SELECT * FROM enquiries WHERE id = $1 AND organization_id = $2`, [
       id,
-    ]);
+        req.user.organization_id,
+      ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -212,11 +190,7 @@ export const getEnquiryById = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -237,7 +211,7 @@ export const updateEnquiry = async (req, res) => {
     hotel_required,
     special_requirements,
     status,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -291,9 +265,8 @@ export const updateEnquiry = async (req, res) => {
            hotel_required = COALESCE($12, hotel_required),
            special_requirements = COALESCE($13, special_requirements),
            status = COALESCE($14, status)
-       WHERE id = $15
-       RETURNING *`,
-      [
+       WHERE id = $15 AND organization_id = $16
+       RETURNING *`, [
         lead_id ?? null,
         customer_id ?? null,
         assigned_to ?? null,
@@ -309,6 +282,7 @@ export const updateEnquiry = async (req, res) => {
         special_requirements ?? null,
         status ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -325,11 +299,7 @@ export const updateEnquiry = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -344,8 +314,8 @@ export const deleteEnquiry = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM enquiries WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM enquiries WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -360,10 +330,6 @@ export const deleteEnquiry = async (req, res) => {
       message: "Enquiry deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

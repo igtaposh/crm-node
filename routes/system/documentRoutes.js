@@ -5,13 +5,13 @@ import {
   getDocumentById,
   deleteDocument,
 } from "../../controllers/system/documentController.js";
-import { userRouteProtector } from "../../middlewares/userRouteProtector.js";
+import { require_permission, userRouteProtector } from "../../middlewares/userRouteProtector.js";
 
 const router = Router();
 
-router.post("/", userRouteProtector, createDocument);
-router.get("/", userRouteProtector, getAllDocuments);
-router.get("/:id", userRouteProtector, getDocumentById);
-router.delete("/:id", userRouteProtector, deleteDocument);
+router.post("/", userRouteProtector, require_permission("etc", "create"), createDocument);
+router.get("/", userRouteProtector, require_permission("etc", "read"), getAllDocuments);
+router.get("/:id", userRouteProtector, require_permission("etc", "read"), getDocumentById);
+router.delete("/:id", userRouteProtector, require_permission("etc", "delete"), deleteDocument);
 
 export default router;

@@ -1,51 +1,42 @@
-import { pool } from "./config/db.js";
+import { initializeDatabase, pool } from "./config/db.js";
 import bcrypt from "bcryptjs";
 
-const user_name = "test";
-const email = "test@test.com";
-const password = "@Taposh6969";
+const user_name = process.env.ADMIN_USER_NAME?.trim();
+const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+const password = process.env.ADMIN_PASSWORD;
 
 const createAdmin = async () => {
   try {
-    if (!user_name || !email || !password) {
-      return console.log("User name, email and password can not be empty.");
+    if (!user_name || user_name.length > 100 || !email || email.length > 250 ||
+        !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+      throw new Error("Configure a valid ADMIN_USER_NAME and ADMIN_EMAIL.");
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-      return console.log("Please use an valid email.");
-    }
-    if (
-      !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,64}$/.test(
-        password,
-      )
-    ) {
-      return console.log(
-        "Password must contain 8-64 characters, including uppercase, lowercase, number and special character.",
-      );
-    }
-
-    const email_check = await pool.query(
-      `SELECT email FROM super_admins WHERE email = $1 `,
-      [email],
-    );
-    if (email_check.rows[0]?.email) {
-      return console.log("Email is already is in use.");
-    }
-    const user_name_check = await pool.query(
-      `SELECT user_name FROM super_admins WHERE user_name = $1 `,
-      [user_name],
-    );
-    if (user_name_check.rows[0]?.user_name) {
-      return console.log("Email is already is in use.");
+    if (!password ||
+        !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,64}$/.test(password)) {
+      throw new Error("ADMIN_PASSWORD must contain 8–64 characters, including uppercase, lowercase, a number and a special character.");
     }
     const salt_rounds = Number(process.env.SALT_ROUNDS);
+    if (!Number.isInteger(salt_rounds) || salt_rounds < 10 || salt_rounds > 15) {
+      throw new Error("Configure SALT_ROUNDS (10–15).");
+    }
+
+    await initializeDatabase();
     const hashed_password = await bcrypt.hash(password, salt_rounds);
-    await pool.query(
-      `INSERT INTO super_admins (user_name, email, password_hash) VALUES ($1, $2, $3)`,
+    const result = await pool.query(
+      `INSERT INTO super_admins (user_name, email, password_hash)
+       SELECT $1, $2, $3
+       WHERE NOT EXISTS (SELECT 1 FROM super_admins WHERE LOWER(email) = $2)
+       ON CONFLICT DO NOTHING`,
       [user_name, email, hashed_password],
     );
-    return console.log("Super admin created successfully.");
+    if (!result.rowCount) throw new Error("User name or email already exists.");
+    console.log("Super admin created successfully.");
   } catch (error) {
-    return console.log(error);
+    console.error("Could not create super admin.", error.code || error.message);
+    process.exitCode = 1;
+  } finally {
+    await pool.end();
   }
 };
-createAdmin();
+
+await createAdmin();

@@ -1,144 +1,91 @@
-import { createHmac, randomInt } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { pool } from "../../config/db.js";
 import { decrypt_data, encrypt_data } from "../../utils/crypto.js";
 import { send_otp_email } from "../../utils/send_otp_email.js";
+import {
+  challenge_digest,
+  issue_account_challenge,
+  verify_account_challenge,
+} from "../../utils/account_challenge.js";
 
 const email_regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const invalid_message = "Invalid or expired reset code.";
 
-const get_otp_digest = (email, otp) => {
-  const key = Buffer.from(process.env.ENCRYPTION_SECRET_KEY, "hex");
+export const password_reset_handlers = (is_admin) => {
+  const purpose = is_admin ? "admin_reset" : "user_reset";
+  const table = is_admin ? "super_admins" : "users";
+  const active = is_admin ? "" : "AND status = 'active'";
 
-  return createHmac("sha256", key)
-    .update(`password-reset-otp:${email}:${otp}`)
-    .digest("hex");
-};
+  const find_account = async (email) => {
+    const result = await pool.query(
+      `SELECT id, email FROM ${table} WHERE LOWER(email) = $1 ${active} LIMIT 2`,
+      [email],
+    );
+    return result.rowCount === 1 ? result.rows[0] : null;
+  };
 
-export const send_password_reset_otp = async (req, res) => {
-  const { email } = req.body || {};
-
-  try {
-    const normalized_email =
-      typeof email === "string" ? email.trim().toLowerCase() : "";
-
+  const send = async (req, res) => {
+    const { email } = req.body || {};
+    const normalized_email = typeof email === "string" ? email.trim().toLowerCase() : "";
     if (normalized_email.length > 255 || !email_regex.test(normalized_email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid email.",
-      });
+      return res.status(400).json({ success: false, message: "Please enter a valid email." });
     }
 
-    const encrypted_email = encrypt_data(normalized_email);
-
+    const encrypted_email = is_admin ? null : encrypt_data(normalized_email);
     res.set("Cache-Control", "no-store");
     res.status(200).json({
       success: true,
       message: "If an account exists for this email, a reset code will be sent.",
-      encryptedEmail: encrypted_email,
+      ...(is_admin ? {} : { encryptedEmail: encrypted_email }),
     });
 
-    const otp = String(randomInt(0, 1000000)).padStart(6, "0");
-    const otp_digest = get_otp_digest(normalized_email, otp);
+    try {
+      const account = await find_account(normalized_email);
+      if (!account) return;
+      const otp = await issue_account_challenge(purpose, account);
+      if (!otp) return;
 
-    const result = await pool.query(
-      `WITH matching_users AS (
-         SELECT id, email FROM users
-         WHERE LOWER(email) = $1 AND status = 'active'
-         LIMIT 2
-       ), saved_otp AS (
-         INSERT INTO password_reset_otps
-           (user_id, otp_digest, attempts_remaining, resend_at, expires_at)
-         SELECT id, $2, 5, NOW() + INTERVAL '1 minute', NOW() + INTERVAL '10 minutes'
-         FROM matching_users
-         WHERE (SELECT COUNT(*) FROM matching_users) = 1
-         ON CONFLICT (user_id) DO UPDATE SET
-           otp_digest = EXCLUDED.otp_digest,
-           attempts_remaining = EXCLUDED.attempts_remaining,
-           resend_at = EXCLUDED.resend_at,
-           expires_at = EXCLUDED.expires_at
-         WHERE password_reset_otps.resend_at <= NOW()
-         RETURNING user_id
-       )
-       SELECT email FROM matching_users JOIN saved_otp ON id = user_id`,
-      [normalized_email, otp_digest],
-    );
-
-    if (result.rowCount === 0) {
-      return;
-    }
-
-    await send_otp_email({
-      email: result.rows[0].email,
-      otp,
-      subject: "Your password reset code",
-      heading: "Reset your password",
-      expires_in_minutes: 10,
-    });
-  } catch {
-    if (res.headersSent) {
+      await send_otp_email({
+        email: account.email,
+        otp,
+        subject: is_admin ? "Your super-admin password reset code" : "Your password reset code",
+        heading: is_admin ? "Reset your super-admin password" : "Reset your password",
+        expires_in_minutes: 10,
+      });
+    } catch {
       console.error("Could not issue or deliver a password reset code.");
-      return;
+    }
+  };
+
+  const verify = async (req, res) => {
+    const { encryptedEmail, email, otp } = req.body || {};
+    if (typeof otp !== "string" || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ success: false, message: invalid_message });
     }
 
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
-  }
-};
+    let normalized_email;
+    try {
+      if (is_admin) {
+        normalized_email = typeof email === "string" ? email.trim().toLowerCase() : "";
+      } else if (typeof encryptedEmail === "string" && encryptedEmail.length <= 568) {
+        normalized_email = decrypt_data(encryptedEmail);
+      }
+    } catch {
+      return res.status(400).json({ success: false, message: invalid_message });
+    }
+    if (!normalized_email || normalized_email.length > 255 || !email_regex.test(normalized_email)) {
+      return res.status(400).json({ success: false, message: invalid_message });
+    }
 
-export const verify_password_reset_otp = async (req, res) => {
-  const { encryptedEmail, otp } = req.body || {};
-  const invalid_message = "Invalid or expired reset code.";
+    const account = await find_account(normalized_email);
+    if (!account) {
+      return res.status(400).json({ success: false, message: invalid_message });
+    }
 
-  if (
-    typeof encryptedEmail !== "string" ||
-    encryptedEmail.length > 568 ||
-    typeof otp !== "string" ||
-    otp.length !== 6 ||
-    !/^\d{6}$/.test(otp)
-  ) {
-    return res.status(400).json({ success: false, message: invalid_message });
-  }
-
-  let email;
-
-  try {
-    email = decrypt_data(encryptedEmail);
-  } catch {
-    return res.status(400).json({ success: false, message: invalid_message });
-  }
-
-  if (
-    email.length > 255 ||
-    !email_regex.test(email) ||
-    email !== email.trim().toLowerCase()
-  ) {
-    return res.status(400).json({ success: false, message: invalid_message });
-  }
-
-  try {
-    const encrypted_email = encrypt_data(email);
-    const otp_digest = get_otp_digest(email, otp);
-    const result = await pool.query(
-      `WITH matching_users AS (
-         SELECT id FROM users
-         WHERE LOWER(email) = $1 AND status = 'active'
-         LIMIT 2
-       )
-       UPDATE password_reset_otps AS reset_otp
-       SET attempts_remaining = CASE
-         WHEN reset_otp.otp_digest = $2 THEN 0
-         ELSE reset_otp.attempts_remaining - 1
-       END
-       FROM matching_users
-       WHERE reset_otp.user_id = matching_users.id
-         AND (SELECT COUNT(*) FROM matching_users) = 1
-         AND reset_otp.expires_at > NOW()
-         AND reset_otp.attempts_remaining > 0
-       RETURNING reset_otp.otp_digest = $2 AS verified`,
-      [email, otp_digest],
-    );
-
+    const reset_token = `${account.id}.${randomBytes(32).toString("hex")}`;
+    const digest = challenge_digest(purpose, account.id, reset_token);
+    const result = await verify_account_challenge(purpose, account, otp, digest);
     if (!result.rows[0]?.verified) {
       return res.status(400).json({ success: false, message: invalid_message });
     }
@@ -147,12 +94,54 @@ export const verify_password_reset_otp = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Password reset code verified.",
-      encryptedEmail: encrypted_email,
+      [is_admin ? "encrypted_email" : "encryptedEmail"]: reset_token,
     });
-  } catch {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
-  }
+  };
+
+  const reset = async (req, res) => {
+    const { encryptedEmail, encrypted_email, new_password } = req.body || {};
+    const reset_token = encryptedEmail ?? encrypted_email;
+    if (
+      typeof reset_token !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.[0-9a-f]{64}$/.test(reset_token)
+    ) {
+      return res.status(400).json({ success: false, message: invalid_message });
+    }
+    const password_regex = is_admin
+      ? /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,64}$/
+      : /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (
+      typeof new_password !== "string" || Buffer.byteLength(new_password, "utf8") > 72 ||
+      !password_regex.test(new_password)
+    ) {
+      return res.status(400).json({ success: false, message: "New password does not meet password requirements." });
+    }
+
+    const account_id = reset_token.split(".")[0];
+    const digest = challenge_digest(purpose, account_id, reset_token);
+    const hash = await bcrypt.hash(new_password, Number(process.env.SALT_ROUNDS));
+    const result = await pool.query(
+      `WITH consumed AS (
+         DELETE FROM account_challenges
+         WHERE purpose = $1 AND account_id = $2 AND reset_digest = $3
+           AND expires_at > NOW()
+         RETURNING account_id, email
+       )
+       UPDATE ${table} SET password_hash = $4, updated_at = NOW()
+       WHERE (id, email) IN (SELECT account_id, email FROM consumed) ${active}`,
+      [purpose, account_id, digest, hash],
+    );
+
+    if (result.rowCount !== 1) {
+      return res.status(400).json({ success: false, message: invalid_message });
+    }
+    return res.status(200).json({ success: true, message: "Password reset successfully." });
+  };
+
+  return { send, verify, reset };
 };
+
+const user_reset = password_reset_handlers(false);
+export const send_password_reset_otp = user_reset.send;
+export const verify_password_reset_otp = user_reset.verify;
+export const reset_user_password = user_reset.reset;

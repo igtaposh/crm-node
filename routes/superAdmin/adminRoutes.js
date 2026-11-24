@@ -13,13 +13,14 @@ import {
 import { adminRouteProtector } from "../../middlewares/adminRouteProtector.js";
 import { limit_password_attempts } from "../../middlewares/passwordResetLimitor.js";
 import {
+  loginLimiter,
   sendOtpLimiter,
   verifyOtpLimiter,
 } from "../../middlewares/otpRateLimiter.js";
 
 const router = express.Router();
 
-router.post("/login", admin_login);
+router.post("/login", loginLimiter(), admin_login);
 router.post("/logout", adminRouteProtector, admin_logout);
 
 router.patch(
@@ -31,17 +32,17 @@ router.patch(
 
 router.post(
   "/password-reset/send-otp",
-  sendOtpLimiter,
+  sendOtpLimiter(),
   send_admin_password_reset_otp,
 );
 
 router.post(
   "/password-reset/verify-otp",
-  verifyOtpLimiter,
+  verifyOtpLimiter(),
   verify_admin_password_reset_otp,
 );
 
-router.post("/password-reset", reset_admin_password);
+router.post("/password-reset", verifyOtpLimiter(), reset_admin_password);
 router.patch(
   "/update/profile",
   adminRouteProtector,

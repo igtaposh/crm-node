@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -11,12 +11,10 @@ const BOOKING_SERVICE_STATUSES = [
 ];
 const MEAL_PLANS = ["ep", "cp", "map", "ap"];
 const TRIP_TYPES = ["transfer", "loacal", "point-to-point", "multi-day"];
-const CAB_SERVICE_STATUSES = ["draft", "issued", "cancelled"];
 const PHONE_REGEX = /^[6-9]\d{9}$/;
 
 export const createBookingService = async (req, res) => {
   const {
-    organization_id,
     supplier_id,
     service_type,
     service_name,
@@ -29,11 +27,11 @@ export const createBookingService = async (req, res) => {
     supplier_reference,
     status,
     notes,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (
-      !organization_id ||
       !service_type ||
       !service_name ||
       selling_price === undefined ||
@@ -42,14 +40,7 @@ export const createBookingService = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, service_type, service_name, selling_price, and supplier_cost are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "service_type, service_name, selling_price, and supplier_cost are required.",
       });
     }
 
@@ -121,30 +112,19 @@ export const createBookingService = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllBookingServices = async (req, res) => {
-  const { organization_id, supplier_id, service_type, status } = req.query;
+  const { supplier_id, service_type, status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM booking_services WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (supplier_id) {
       if (!UUID_REGEX.test(supplier_id)) {
@@ -176,11 +156,7 @@ export const getAllBookingServices = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -195,8 +171,8 @@ export const getBookingServiceById = async (req, res) => {
     }
 
     const serviceResult = await pool.query(
-      `SELECT * FROM booking_services WHERE id = $1`,
-      [id],
+      `SELECT * FROM booking_services WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (serviceResult.rows.length === 0) {
@@ -212,8 +188,8 @@ export const getBookingServiceById = async (req, res) => {
     );
 
     const cabDetails = await pool.query(
-      `SELECT * FROM cab_service_details WHERE booking_service_id = $1`,
-      [id],
+      `SELECT * FROM cab_service_details WHERE booking_service_id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     const voucher = await pool.query(
@@ -232,11 +208,7 @@ export const getBookingServiceById = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -254,7 +226,7 @@ export const updateBookingService = async (req, res) => {
     supplier_reference,
     status,
     notes,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -291,9 +263,8 @@ export const updateBookingService = async (req, res) => {
            supplier_reference = COALESCE($9, supplier_reference),
            status = COALESCE($10, status),
            notes = COALESCE($11, notes)
-       WHERE id = $12
-       RETURNING *`,
-      [
+       WHERE id = $12 AND organization_id = $13
+       RETURNING *`, [
         supplier_id ?? null,
         service_name ?? null,
         service_date ?? null,
@@ -306,6 +277,7 @@ export const updateBookingService = async (req, res) => {
         status ?? null,
         notes ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -322,11 +294,7 @@ export const updateBookingService = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -341,8 +309,8 @@ export const deleteBookingService = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM booking_services WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM booking_services WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -357,11 +325,7 @@ export const deleteBookingService = async (req, res) => {
       message: "Booking service deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -378,7 +342,7 @@ export const addHotelDetails = async (req, res) => {
     check_out,
     extra_beds,
     confirmation_number,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -406,7 +370,8 @@ export const addHotelDetails = async (req, res) => {
     const result = await pool.query(
       `INSERT INTO hotel_service_details
        (booking_service_id, hotel_name, room_category, meal_plan, rooms, adults, children, check_in, check_out, extra_beds, confirmation_number)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       SELECT id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11 FROM booking_services
+       WHERE id = $1 AND organization_id = $12
        RETURNING *`,
       [
         id,
@@ -420,8 +385,13 @@ export const addHotelDetails = async (req, res) => {
         check_out,
         extra_beds || 0,
         confirmation_number || null,
+        req.user.organization_id,
       ],
     );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ success: false, message: "Booking service not found." });
+    }
 
     return res.status(201).json({
       success: true,
@@ -429,11 +399,7 @@ export const addHotelDetails = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -449,7 +415,7 @@ export const addServiceVoucher = async (req, res) => {
     pickup_time,
     trip_type,
     distance_km,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -476,7 +442,8 @@ export const addServiceVoucher = async (req, res) => {
     const result = await pool.query(
       `INSERT INTO service_voucher
        (booking_service_id, vehicle_type, vehicle_number, driver_name, driver_phone, pickup_location, drop_location, pickup_time, trip_type, distance_km)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       SELECT id, $2, $3, $4, $5, $6, $7, $8, $9, $10 FROM booking_services
+       WHERE id = $1 AND organization_id = $11
        RETURNING *`,
       [
         id,
@@ -489,8 +456,13 @@ export const addServiceVoucher = async (req, res) => {
         pickup_time || null,
         trip_type || null,
         distance_km || null,
+        req.user.organization_id,
       ],
     );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ success: false, message: "Booking service not found." });
+    }
 
     return res.status(201).json({
       success: true,
@@ -498,10 +470,6 @@ export const addServiceVoucher = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

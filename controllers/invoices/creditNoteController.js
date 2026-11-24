@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -7,7 +7,6 @@ const VENDOR_CREDIT_STATUSES = ["draft", "approved", "applied", "cancelled"];
 
 export const createCreditNote = async (req, res) => {
   const {
-    organization_id,
     invoice_id,
     credit_note_number,
     issue_date,
@@ -16,11 +15,11 @@ export const createCreditNote = async (req, res) => {
     tax_amount,
     total_amount,
     status,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (
-      !organization_id ||
       !invoice_id ||
       !credit_note_number ||
       !issue_date ||
@@ -31,14 +30,7 @@ export const createCreditNote = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, invoice_id, credit_note_number, issue_date, taxable_amount, tax_amount, and total_amount are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "invoice_id, credit_note_number, issue_date, taxable_amount, tax_amount, and total_amount are required.",
       });
     }
 
@@ -81,30 +73,19 @@ export const createCreditNote = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllCreditNotes = async (req, res) => {
-  const { organization_id, invoice_id } = req.query;
+  const { invoice_id } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM credit_notes WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (invoice_id) {
       if (!UUID_REGEX.test(invoice_id)) {
@@ -126,11 +107,7 @@ export const getAllCreditNotes = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -145,8 +122,8 @@ export const getCreditNoteById = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT * FROM credit_notes WHERE id = $1`,
-      [id],
+      `SELECT * FROM credit_notes WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -162,17 +139,12 @@ export const getCreditNoteById = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const createVendorCredit = async (req, res) => {
   const {
-    organization_id,
     supplier_id,
     vendor_bill_id,
     credit_note_number,
@@ -182,11 +154,11 @@ export const createVendorCredit = async (req, res) => {
     tax_amount,
     total_amount,
     status,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (
-      !organization_id ||
       !supplier_id ||
       !credit_note_number ||
       !issue_date ||
@@ -197,14 +169,7 @@ export const createVendorCredit = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, supplier_id, credit_note_number, issue_date, taxable_amount, tax_amount, and total_amount are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "supplier_id, credit_note_number, issue_date, taxable_amount, tax_amount, and total_amount are required.",
       });
     }
 
@@ -255,30 +220,19 @@ export const createVendorCredit = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllVendorCredits = async (req, res) => {
-  const { organization_id, supplier_id } = req.query;
+  const { supplier_id } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM vendor_credits WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (supplier_id) {
       if (!UUID_REGEX.test(supplier_id)) {
@@ -300,11 +254,7 @@ export const getAllVendorCredits = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -319,8 +269,8 @@ export const getVendorCreditById = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT * FROM vendor_credits WHERE id = $1`,
-      [id],
+      `SELECT * FROM vendor_credits WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -336,10 +286,6 @@ export const getVendorCreditById = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

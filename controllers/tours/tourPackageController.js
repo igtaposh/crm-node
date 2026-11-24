@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -6,7 +6,6 @@ const PACKAGE_STATUSES = ["active", "inactive", "draft", "archived"];
 
 export const createTourPackage = async (req, res) => {
   const {
-    organization_id,
     package_code,
     name,
     slug,
@@ -21,25 +20,18 @@ export const createTourPackage = async (req, res) => {
     status,
     destinations,
     itinerary,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (
-      !organization_id ||
       !name ||
       duration_days === undefined ||
       duration_nights === undefined
     ) {
       return res.status(400).json({
         success: false,
-        message: "organization_id, name, duration_days, and duration_nights are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "name, duration_days, and duration_nights are required.",
       });
     }
 
@@ -109,13 +101,18 @@ export const createTourPackage = async (req, res) => {
 
       if (Array.isArray(destinations)) {
         for (let i = 0; i < destinations.length; i++) {
-          const destId = typeof destinations[i] === "object" ? destinations[i].destination_id : destinations[i];
-          const seq = typeof destinations[i] === "object" && destinations[i].sequence !== undefined ? destinations[i].sequence : i + 1;
+          const destId = (destinations[i] && typeof destinations[i] === "object") ? destinations[i].destination_id : destinations[i];
+          const seq = (destinations[i] && typeof destinations[i] === "object") && destinations[i].sequence !== undefined ? destinations[i].sequence : i + 1;
           if (destId && UUID_REGEX.test(destId)) {
-            await client.query(
-              `INSERT INTO package_destinatons (package_id, destination_id, sequence) VALUES ($1, $2, $3)`,
-              [pkg.id, destId, seq],
+            const destination = await client.query(
+              `INSERT INTO package_destinatons (package_id, destination_id, sequence)
+               SELECT $1, id, $3 FROM destinations WHERE id = $2 AND organization_id = $4`,
+              [pkg.id, destId, seq, organization_id],
             );
+            if (!destination.rowCount) {
+              await client.query("ROLLBACK");
+              return res.status(400).json({ success: false, message: "A destination is unavailable." });
+            }
           }
         }
       }
@@ -156,30 +153,19 @@ export const createTourPackage = async (req, res) => {
       client.release();
     }
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllTourPackages = async (req, res) => {
-  const { organization_id, status } = req.query;
+  const { status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM tour_packages WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (status) {
       params.push(status);
@@ -195,11 +181,7 @@ export const getAllTourPackages = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -214,8 +196,8 @@ export const getTourPackageById = async (req, res) => {
     }
 
     const pkgResult = await pool.query(
-      `SELECT * FROM tour_packages WHERE id = $1`,
-      [id],
+      `SELECT * FROM tour_packages WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (pkgResult.rows.length === 0) {
@@ -229,9 +211,9 @@ export const getTourPackageById = async (req, res) => {
       `SELECT pd.sequence, d.*
        FROM package_destinatons pd
        JOIN destinations d ON pd.destination_id = d.id
-       WHERE pd.package_id = $1
+       WHERE pd.package_id = $1 AND d.organization_id = $2
        ORDER BY pd.sequence ASC`,
-      [id],
+      [id, req.user.organization_id],
     );
 
     const itineraryResult = await pool.query(
@@ -249,11 +231,7 @@ export const getTourPackageById = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -272,7 +250,7 @@ export const updateTourPackage = async (req, res) => {
     exclusions,
     cancellation_policy_id,
     status,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -311,9 +289,8 @@ export const updateTourPackage = async (req, res) => {
            cancellation_policy_id = COALESCE($11, cancellation_policy_id),
            status = COALESCE($12, status),
            updated_at = NOW()
-       WHERE id = $13
-       RETURNING *`,
-      [
+       WHERE id = $13 AND organization_id = $14
+       RETURNING *`, [
         package_code ?? null,
         name ?? null,
         slug ?? null,
@@ -327,6 +304,7 @@ export const updateTourPackage = async (req, res) => {
         cancellation_policy_id ?? null,
         status ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -343,11 +321,7 @@ export const updateTourPackage = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -362,8 +336,8 @@ export const deleteTourPackage = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM tour_packages WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM tour_packages WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -378,10 +352,6 @@ export const deleteTourPackage = async (req, res) => {
       message: "Tour package deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

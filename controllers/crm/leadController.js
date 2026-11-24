@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -26,7 +26,6 @@ const ACTIVITY_TYPES = ["call", "email", "whatsapp", "meeting", "note"];
 
 export const createLead = async (req, res) => {
   const {
-    organization_id,
     customer_id,
     assigned_to,
     lead_name,
@@ -40,20 +39,14 @@ export const createLead = async (req, res) => {
     priority,
     next_follow_up,
     lost_reason,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
-    if (!organization_id || !lead_name) {
+    if (!lead_name) {
       return res.status(400).json({
         success: false,
-        message: "organization_id and lead_name are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "lead_name are required.",
       });
     }
 
@@ -137,30 +130,19 @@ export const createLead = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllLeads = async (req, res) => {
-  const { organization_id, status, assigned_to } = req.query;
+  const { status, assigned_to } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM leads WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (status) {
       params.push(status);
@@ -187,11 +169,7 @@ export const getAllLeads = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -205,9 +183,10 @@ export const getLeadById = async (req, res) => {
       });
     }
 
-    const leadResult = await pool.query(`SELECT * FROM leads WHERE id = $1`, [
+    const leadResult = await pool.query(`SELECT * FROM leads WHERE id = $1 AND organization_id = $2`, [
       id,
-    ]);
+        req.user.organization_id,
+      ]);
 
     if (leadResult.rows.length === 0) {
       return res.status(404).json({
@@ -217,8 +196,8 @@ export const getLeadById = async (req, res) => {
     }
 
     const activitiesResult = await pool.query(
-      `SELECT * FROM lead_activities WHERE lead_id = $1 ORDER BY activity_date DESC`,
-      [id],
+      `SELECT * FROM lead_activities WHERE lead_id = $1 AND organization_id = $2 ORDER BY activity_date DESC`,
+      [id, req.user.organization_id],
     );
 
     return res.status(200).json({
@@ -230,11 +209,7 @@ export const getLeadById = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -254,7 +229,7 @@ export const updateLead = async (req, res) => {
     priority,
     next_follow_up,
     lost_reason,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -329,9 +304,8 @@ export const updateLead = async (req, res) => {
            next_follow_up = COALESCE($12, next_follow_up),
            lost_reason = COALESCE($13, lost_reason),
            updated_at = NOW()
-       WHERE id = $14
-       RETURNING *`,
-      [
+       WHERE id = $14 AND organization_id = $15
+       RETURNING *`, [
         customer_id ?? null,
         assigned_to ?? null,
         lead_name ?? null,
@@ -346,6 +320,7 @@ export const updateLead = async (req, res) => {
         next_follow_up ?? null,
         lost_reason ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -362,11 +337,7 @@ export const updateLead = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -381,8 +352,8 @@ export const deleteLead = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM leads WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM leads WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -397,18 +368,14 @@ export const deleteLead = async (req, res) => {
       message: "Lead deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const addLeadActivity = async (req, res) => {
   const { id } = req.params;
-  const { organization_id, user_id, activity_type, subject, description, activity_date, next_follow_up } =
-    req.body;
+  const { activity_type, subject, description, activity_date, next_follow_up } = req.body || {};
+  const { organization_id, id: user_id } = req.user;
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -418,17 +385,10 @@ export const addLeadActivity = async (req, res) => {
       });
     }
 
-    if (!organization_id || !activity_type) {
+    if (!activity_type) {
       return res.status(400).json({
         success: false,
-        message: "organization_id and activity_type are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "activity_type are required.",
       });
     }
 
@@ -469,10 +429,6 @@ export const addLeadActivity = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -6,22 +6,15 @@ const PERIOD_STATUSES = ["open", "closed", "locked"];
 const RECONCILIATION_STATUSES = ["unmatched", "matched", "reconciled"];
 
 export const createAccountingPeriod = async (req, res) => {
-  const { organization_id, period_name, start_date, end_date, status } =
-    req.body;
+  const { period_name, start_date, end_date, status } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
-    if (!organization_id || !period_name || !start_date || !end_date) {
+    if (!period_name || !start_date || !end_date) {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, period_name, start_date, and end_date are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "period_name, start_date, and end_date are required.",
       });
     }
 
@@ -53,30 +46,19 @@ export const createAccountingPeriod = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllAccountingPeriods = async (req, res) => {
-  const { organization_id, status } = req.query;
+  const { status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM accounting_periods WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (status) {
       params.push(status);
@@ -92,17 +74,13 @@ export const getAllAccountingPeriods = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const updateAccountingPeriodStatus = async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -120,8 +98,8 @@ export const updateAccountingPeriodStatus = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE accounting_periods SET status = $1 WHERE id = $2 RETURNING *`,
-      [status, id],
+      `UPDATE accounting_periods SET status = $1 WHERE id = $2 AND organization_id = $3 RETURNING *`,
+      [status, id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -137,17 +115,12 @@ export const updateAccountingPeriodStatus = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const createBankTransaction = async (req, res) => {
   const {
-    organization_id,
     bank_account_id,
     transaction_date,
     description,
@@ -156,11 +129,11 @@ export const createBankTransaction = async (req, res) => {
     credit,
     balance,
     reconcilition_status,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (
-      !organization_id ||
       !bank_account_id ||
       !transaction_date ||
       debit === undefined ||
@@ -170,14 +143,7 @@ export const createBankTransaction = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, bank_account_id, transaction_date, debit, credit, and reconcilition_status are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "bank_account_id, transaction_date, debit, credit, and reconcilition_status are required.",
       });
     }
 
@@ -226,30 +192,19 @@ export const createBankTransaction = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllBankTransactions = async (req, res) => {
-  const { organization_id, bank_account_id } = req.query;
+  const { bank_account_id } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM bank_transactions WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (bank_account_id) {
       if (!UUID_REGEX.test(bank_account_id)) {
@@ -271,10 +226,6 @@ export const getAllBankTransactions = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

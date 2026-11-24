@@ -1,24 +1,18 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHARGE_TYPES = ["fixed-amount", "percentage"];
 
 export const createCancellationPolicy = async (req, res) => {
-  const { organization_id, name, description, is_active, rules } = req.body;
+  const { name, description, is_active, rules } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
-    if (!organization_id || !name) {
+    if (!name) {
       return res.status(400).json({
         success: false,
-        message: "organization_id and name are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "name are required.",
       });
     }
 
@@ -34,7 +28,7 @@ export const createCancellationPolicy = async (req, res) => {
           organization_id,
           name,
           description || null,
-          is_active !== undefined ? Boolean(is_active) : true,
+          is_active ?? true,
         ],
       );
 
@@ -86,30 +80,18 @@ export const createCancellationPolicy = async (req, res) => {
       client.release();
     }
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllCancellationPolicies = async (req, res) => {
-  const { organization_id } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM cancellation_policies WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     query += ` ORDER BY name ASC`;
 
@@ -120,11 +102,7 @@ export const getAllCancellationPolicies = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -139,8 +117,8 @@ export const getCancellationPolicyById = async (req, res) => {
     }
 
     const policyResult = await pool.query(
-      `SELECT * FROM cancellation_policies WHERE id = $1`,
-      [id],
+      `SELECT * FROM cancellation_policies WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (policyResult.rows.length === 0) {
@@ -164,17 +142,13 @@ export const getCancellationPolicyById = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const updateCancellationPolicy = async (req, res) => {
   const { id } = req.params;
-  const { name, description, is_active } = req.body;
+  const { name, description, is_active } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -189,9 +163,9 @@ export const updateCancellationPolicy = async (req, res) => {
        SET name = COALESCE($1, name),
            description = COALESCE($2, description),
            is_active = COALESCE($3, is_active)
-       WHERE id = $4
+       WHERE id = $4 AND organization_id = $5
        RETURNING *`,
-      [name ?? null, description ?? null, is_active ?? null, id],
+      [name ?? null, description ?? null, is_active ?? null, id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -207,11 +181,7 @@ export const updateCancellationPolicy = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -226,8 +196,8 @@ export const deleteCancellationPolicy = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM cancellation_policies WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM cancellation_policies WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -242,17 +212,13 @@ export const deleteCancellationPolicy = async (req, res) => {
       message: "Cancellation policy deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const addCancellationRule = async (req, res) => {
   const { id } = req.params;
-  const { days_before_depurture, charge_type, charge_value } = req.body;
+  const { days_before_depurture, charge_type, charge_value } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -290,10 +256,15 @@ export const addCancellationRule = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO cancellation_policy_rules (policy_id, days_before_depurture, charge_type, charge_value)
-       VALUES ($1, $2, $3, $4)
+       SELECT id, $2, $3, $4 FROM cancellation_policies
+       WHERE id = $1 AND organization_id = $5
        RETURNING *`,
-      [id, days_before_depurture, charge_type, charge_value],
+      [id, days_before_depurture, charge_type, charge_value, req.user.organization_id],
     );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ success: false, message: "Cancellation policy not found." });
+    }
 
     return res.status(201).json({
       success: true,
@@ -301,10 +272,6 @@ export const addCancellationRule = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

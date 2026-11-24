@@ -11,10 +11,10 @@ export const create_branch = async (req, res) => {
     state,
     gstin,
     is_head_office,
-  } = req.body;
+  } = req.body || {};
   const { organization_id } = req.user;
 
-  const isHeadOffice = is_head_office ?? true;
+  const isHeadOffice = is_head_office ?? false;
 
   try {
     if (req.role !== "admin") {
@@ -52,6 +52,9 @@ export const create_branch = async (req, res) => {
         message: "Branch code is already exist.",
       });
     }
+    if (typeof isHeadOffice !== "boolean") {
+      return res.status(400).json({ success: false, message: "is_head_office must be true or false." });
+    }
     if (email) {
       if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
         return res.status(400).json({
@@ -83,12 +86,11 @@ export const create_branch = async (req, res) => {
       [organization_id],
     );
 
-    if (is_head_office && existingHeadOffice.rowCount !== 0) {
+    if (isHeadOffice && existingHeadOffice.rowCount !== 0) {
       return res.status(403).json({
         success: false,
         message: "This organization already has a head office.",
       });
-      z;
     }
 
     const result = await pool.query(
@@ -190,7 +192,6 @@ export const get_branch_by_id = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error.",
-      error,
     });
   }
 };
@@ -208,6 +209,16 @@ export const update_branch = async (req, res) => {
         message: "You are not authorized to update branch status.",
       });
     }
+    if (
+      typeof branch_id !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branch_id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid branch ID.",
+      });
+    }
+
     const fields = [
       { column: "branch_name", value: branch_name, pattern: /^.{1,150}$/u },
       { column: "branch_code", value: branch_code, pattern: /^.{1,30}$/u },
@@ -358,25 +369,8 @@ export const update_branch_status = async (req, res) => {
     }
 
     const result = await pool.query(
-      `WITH updated_branch AS (
-         UPDATE branches
-         SET status = $1
-         WHERE id = $2 AND organization_id = $3
-         RETURNING id, organization_id, status
-       ),
-       updated_users AS (
-         UPDATE users AS u
-         SET status = b.status::text::user_status,
-             updated_at = NOW()
-         FROM updated_branch AS b
-         WHERE u.branch_id = b.id
-           AND u.organization_id = b.organization_id
-           AND u.status <> b.status::text::user_status
-         RETURNING u.id
-       )
-       SELECT id, status,
-              (SELECT COUNT(*)::integer FROM updated_users) AS updated_users
-       FROM updated_branch`,
+      `UPDATE branches SET status = $1
+       WHERE id = $2 AND organization_id = $3 RETURNING id, organization_id, status`,
       [status, id, organization_id],
     );
 
@@ -389,7 +383,7 @@ export const update_branch_status = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Branch and user statuses updated successfully.",
+      message: "Branch status updated successfully.",
       data: result.rows[0],
     });
   } catch {

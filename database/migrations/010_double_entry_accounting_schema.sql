@@ -139,19 +139,6 @@ CREATE TABLE IF NOT EXISTS accounting_periods(
     CONSTRAINT check_end_date CHECK (end_date >= start_date)
 );
 
-CREATE TABLE IF NOT EXISTS accounting_periods(
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    account_name VARCHAR(150) NOT NULL,
-    bank_name VARCHAR(150) NOT NULL,
-    accoount_number_encrypted TEXT,
-    ifsc VARCHAR(11),
-    ledger_account_id UUID NOT NULL,
-
-    CONSTRAINT valid_ifsc_code
-        CHECK ( ifsc_code IS NULL OR UPPER(ifsc_code) ~ '^[A-Z]{4}0[A-Z0-9]{6}$')
-);
-
 CREATE TABLE IF NOT EXISTS bank_transactions(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

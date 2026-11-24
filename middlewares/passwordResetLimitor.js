@@ -4,7 +4,7 @@ const max_attempts = 5;
 
 export const limit_password_attempts = (req, res, next) => {
   const now = Date.now();
-  const admin_id = req.admin;
+  const admin_id = req.admin.id;
 
   for (const [id, attempt] of password_attempts) {
     if (attempt.reset_at <= now) {

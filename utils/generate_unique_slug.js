@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import pool from "../config/db.js";
+import { pool } from "../config/db.js";
 
 export const generateUniqueSlug = async (name) => {
   if (typeof name !== "string" || !name.trim()) {

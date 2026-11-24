@@ -1,13 +1,11 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const JOURNAL_STATUSES = ["draft", "posted", "reversed"];
 const PARTY_TYPES = ["customer", "supplier", "employee", "none"];
 
 export const createJournalEntry = async (req, res) => {
   const {
-    organization_id,
     branch_id,
     journal_number,
     journal_date,
@@ -15,28 +13,20 @@ export const createJournalEntry = async (req, res) => {
     reference_id,
     description,
     status,
-    posted_by,
     lines,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
-  const posterId = posted_by || req.user?.id;
+  const posterId = req.user.id;
 
   try {
     if (
-      !organization_id ||
       !journal_number ||
       !journal_date
     ) {
       return res.status(400).json({
         success: false,
-        message: "organization_id, journal_number, and journal_date are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "journal_number, and journal_date are required.",
       });
     }
 
@@ -55,11 +45,30 @@ export const createJournalEntry = async (req, res) => {
     }
 
     const statusValue = status ?? "posted";
-    if (!JOURNAL_STATUSES.includes(statusValue)) {
+    if (!["draft", "posted"].includes(statusValue)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status. Allowed: ${JOURNAL_STATUSES.join(", ")}`,
+        message: "Invalid status. Allowed: draft, posted.",
       });
+    }
+
+    if (statusValue === "posted" && req.role !== "admin" &&
+        !req.permissions.some((permission) => permission.module === "finance" && permission.action === "post")) {
+      return res.status(403).json({ success: false, message: "Permission to post journal entries is required." });
+    }
+    if (!Array.isArray(lines) || lines.length < 2) {
+      return res.status(400).json({ success: false, message: "At least two journal lines are required." });
+    }
+    for (const line of lines) {
+      const debit = line?.debit ?? 0;
+      const credit = line?.credit ?? 0;
+      const amount_pattern = /^\d+(?:\.\d{1,2})?$/;
+      if (!UUID_REGEX.test(line?.account_id) ||
+          !PARTY_TYPES.includes(line?.party_type ?? "none") ||
+          !amount_pattern.test(String(debit)) || !amount_pattern.test(String(credit)) ||
+          (Number(debit) > 0) === (Number(credit) > 0)) {
+        return res.status(400).json({ success: false, message: "Each line must have an account and a positive debit or credit." });
+      }
     }
 
     const client = await pool.connect();
@@ -90,16 +99,17 @@ export const createJournalEntry = async (req, res) => {
 
       if (Array.isArray(lines) && lines.length > 0) {
         for (const line of lines) {
-          if (!line.account_id) continue;
-          if (!UUID_REGEX.test(line.account_id)) continue;
-
           const pType = line.party_type ?? "none";
-          if (!PARTY_TYPES.includes(pType)) continue;
 
           const lineResult = await client.query(
             `INSERT INTO journal_lines
              (journal_entry_id, account_id, debit, credit, description, party_type, party_id, booking_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             SELECT $1, a.id, $3, $4, $5, $6, $7, $8
+             FROM charts_of_accounts a
+             WHERE a.id = $2 AND a.organization_id = $9 AND a.status = 'active'
+               AND ($8::uuid IS NULL OR EXISTS (
+                 SELECT 1 FROM bookings WHERE id = $8 AND organization_id = $9
+               ))
              RETURNING *`,
             [
               entry.id,
@@ -110,10 +120,24 @@ export const createJournalEntry = async (req, res) => {
               pType,
               line.party_id || null,
               line.booking_id || null,
+              organization_id,
             ],
           );
+          if (!lineResult.rowCount) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ success: false, message: "A journal line account or booking is unavailable." });
+          }
           insertedLines.push(lineResult.rows[0]);
         }
+      }
+
+      const totals = await client.query(
+        "SELECT SUM(debit) = SUM(credit) AS balanced FROM journal_lines WHERE journal_entry_id = $1",
+        [entry.id],
+      );
+      if (!totals.rows[0]?.balanced) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ success: false, message: "Journal debits and credits must balance." });
       }
 
       await client.query("COMMIT");
@@ -133,30 +157,19 @@ export const createJournalEntry = async (req, res) => {
       client.release();
     }
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllJournalEntries = async (req, res) => {
-  const { organization_id, status } = req.query;
+  const { status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM journal_entries WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (status) {
       params.push(status);
@@ -172,11 +185,7 @@ export const getAllJournalEntries = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -191,8 +200,8 @@ export const getJournalEntryById = async (req, res) => {
     }
 
     const entryResult = await pool.query(
-      `SELECT * FROM journal_entries WHERE id = $1`,
-      [id],
+      `SELECT * FROM journal_entries WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (entryResult.rows.length === 0) {
@@ -216,11 +225,7 @@ export const getJournalEntryById = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -235,8 +240,9 @@ export const reverseJournalEntry = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE journal_entries SET status = 'reversed' WHERE id = $1 RETURNING *`,
-      [id],
+      `UPDATE journal_entries SET status = 'reversed'
+       WHERE id = $1 AND organization_id = $2 AND status = 'posted' RETURNING *`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -252,10 +258,6 @@ export const reverseJournalEntry = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

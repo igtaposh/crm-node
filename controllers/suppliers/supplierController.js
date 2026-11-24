@@ -1,4 +1,5 @@
-import { pool } from "../../config/db.js";
+import { encrypt_data } from "../../utils/crypto.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -11,7 +12,6 @@ const SUPPLIER_STATUSES = ["active", "inactive", "blocked"];
 
 export const createSupplier = async (req, res) => {
   const {
-    organization_id,
     supplier_code,
     supplier_type,
     name,
@@ -25,20 +25,14 @@ export const createSupplier = async (req, res) => {
     bank_details_encrypted,
     status,
     contacts,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
-    if (!organization_id || !supplier_type || !name) {
+    if (!supplier_type || !name) {
       return res.status(400).json({
         success: false,
-        message: "organization_id, supplier_type, and name are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "supplier_type, and name are required.",
       });
     }
 
@@ -99,7 +93,7 @@ export const createSupplier = async (req, res) => {
           address || null,
           city || null,
           state || null,
-          bank_details_encrypted ? JSON.stringify(bank_details_encrypted) : null,
+          bank_details_encrypted == null ? null : JSON.stringify(encrypt_data(JSON.stringify(bank_details_encrypted))),
           statusValue,
         ],
       );
@@ -136,6 +130,7 @@ export const createSupplier = async (req, res) => {
         message: "Supplier created successfully.",
         data: {
           ...supplier,
+          bank_details_encrypted: null,
           contacts: insertedContacts,
         },
       });
@@ -146,30 +141,19 @@ export const createSupplier = async (req, res) => {
       client.release();
     }
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllSuppliers = async (req, res) => {
-  const { organization_id, supplier_type, status } = req.query;
+  const { supplier_type, status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM suppliers WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (supplier_type) {
       params.push(supplier_type);
@@ -187,14 +171,10 @@ export const getAllSuppliers = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Suppliers fetched successfully.",
-      data: result.rows,
+      data: result.rows.map((supplier) => ({ ...supplier, bank_details_encrypted: null })),
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -209,8 +189,8 @@ export const getSupplierById = async (req, res) => {
     }
 
     const supplierResult = await pool.query(
-      `SELECT * FROM suppliers WHERE id = $1`,
-      [id],
+      `SELECT * FROM suppliers WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (supplierResult.rows.length === 0) {
@@ -230,15 +210,12 @@ export const getSupplierById = async (req, res) => {
       message: "Supplier fetched successfully.",
       data: {
         ...supplierResult.rows[0],
+        bank_details_encrypted: null,
         contacts: contactsResult.rows,
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -257,7 +234,7 @@ export const updateSupplier = async (req, res) => {
     state,
     bank_details_encrypted,
     status,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -316,9 +293,8 @@ export const updateSupplier = async (req, res) => {
            state = COALESCE($10, state),
            bank_details_encrypted = COALESCE($11, bank_details_encrypted),
            status = COALESCE($12, status)
-       WHERE id = $13
-       RETURNING *`,
-      [
+       WHERE id = $13 AND organization_id = $14
+       RETURNING *`, [
         supplier_code ?? null,
         supplier_type ?? null,
         name ?? null,
@@ -329,9 +305,10 @@ export const updateSupplier = async (req, res) => {
         address ?? null,
         city ?? null,
         state ?? null,
-        bank_details_encrypted ? JSON.stringify(bank_details_encrypted) : null,
+        bank_details_encrypted == null ? null : JSON.stringify(encrypt_data(JSON.stringify(bank_details_encrypted))),
         status ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -345,14 +322,10 @@ export const updateSupplier = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Supplier updated successfully.",
-      data: result.rows[0],
+      data: { ...result.rows[0], bank_details_encrypted: null },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -367,8 +340,8 @@ export const deleteSupplier = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM suppliers WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM suppliers WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -383,17 +356,13 @@ export const deleteSupplier = async (req, res) => {
       message: "Supplier deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const addSupplierContact = async (req, res) => {
   const { id } = req.params;
-  const { name, designation, email, phone } = req.body;
+  const { name, designation, email, phone } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -426,10 +395,15 @@ export const addSupplierContact = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO supplier_contacts (supplier_id, name, designation, email, phone)
-       VALUES ($1, $2, $3, $4, $5)
+       SELECT id, $2, $3, $4, $5 FROM suppliers
+       WHERE id = $1 AND organization_id = $6
        RETURNING *`,
-      [id, name, designation || null, email || null, phone || null],
+      [id, name, designation || null, email || null, phone || null, req.user.organization_id],
     );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ success: false, message: "Supplier not found." });
+    }
 
     return res.status(201).json({
       success: true,
@@ -437,10 +411,6 @@ export const addSupplierContact = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

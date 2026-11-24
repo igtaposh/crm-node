@@ -1,4 +1,5 @@
-import { pool } from "../../config/db.js";
+import { encrypt_data } from "../../utils/crypto.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -22,7 +23,6 @@ const PHONE_REGEX = /^[6-9]\d{9}$/;
 
 export const createBooking = async (req, res) => {
   const {
-    organization_id,
     branch_id,
     booking_number,
     customer_id,
@@ -46,11 +46,11 @@ export const createBooking = async (req, res) => {
     payment_status,
     internal_notes,
     guests,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (
-      !organization_id ||
       !booking_number ||
       !customer_id ||
       !booking_date ||
@@ -65,14 +65,7 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, booking_number, customer_id, booking_date, adults, children, infants, subtotal, discount, tax_amount, and final_amount are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "booking_number, customer_id, booking_date, adults, children, infants, subtotal, discount, tax_amount, and final_amount are required.",
       });
     }
 
@@ -180,7 +173,11 @@ export const createBooking = async (req, res) => {
 
       if (Array.isArray(guests) && guests.length > 0) {
         for (const guest of guests) {
-          if (!guest.full_name) continue;
+          if (!guest?.full_name) continue;
+          if (guest.document_number_encrypted != null && typeof guest.document_number_encrypted !== "string") {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ success: false, message: "Guest document number must be a string." });
+          }
 
           const gType = guest.guest_type ?? "adult";
           const genderVal = guest.gender || null;
@@ -199,10 +196,10 @@ export const createBooking = async (req, res) => {
               gType,
               guest.phone || null,
               guest.document_type || null,
-              guest.document_number_encrypted || null,
+              guest.document_number_encrypted ? encrypt_data(guest.document_number_encrypted) : null,
             ],
           );
-          insertedGuests.push(guestResult.rows[0]);
+          insertedGuests.push({ ...guestResult.rows[0], document_number_encrypted: null });
         }
       }
 
@@ -223,31 +220,19 @@ export const createBooking = async (req, res) => {
       client.release();
     }
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllBookings = async (req, res) => {
-  const { organization_id, customer_id, booking_status, payment_status } =
-    req.query;
+  const { customer_id, booking_status, payment_status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM bookings WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (customer_id) {
       if (!UUID_REGEX.test(customer_id)) {
@@ -279,11 +264,7 @@ export const getAllBookings = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -298,8 +279,8 @@ export const getBookingById = async (req, res) => {
     }
 
     const bookingResult = await pool.query(
-      `SELECT * FROM bookings WHERE id = $1`,
-      [id],
+      `SELECT * FROM bookings WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (bookingResult.rows.length === 0) {
@@ -310,13 +291,13 @@ export const getBookingById = async (req, res) => {
     }
 
     const guestsResult = await pool.query(
-      `SELECT * FROM booking_guests WHERE booking_id = $1`,
-      [id],
+      `SELECT * FROM booking_guests WHERE booking_id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     const cancellationsResult = await pool.query(
-      `SELECT * FROM booking_cancellations WHERE booking_id = $1`,
-      [id],
+      `SELECT * FROM booking_cancellations WHERE booking_id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     return res.status(200).json({
@@ -324,16 +305,12 @@ export const getBookingById = async (req, res) => {
       message: "Booking fetched successfully.",
       data: {
         ...bookingResult.rows[0],
-        guests: guestsResult.rows,
+        guests: guestsResult.rows.map((guest) => ({ ...guest, document_number_encrypted: null })),
         cancellations: cancellationsResult.rows,
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -356,7 +333,7 @@ export const updateBooking = async (req, res) => {
     booking_status,
     payment_status,
     internal_notes,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -399,9 +376,8 @@ export const updateBooking = async (req, res) => {
            payment_status = COALESCE($15, payment_status),
            internal_notes = COALESCE($16, internal_notes),
            updated_at = NOW()
-       WHERE id = $17
-       RETURNING *`,
-      [
+       WHERE id = $17 AND organization_id = $18
+       RETURNING *`, [
         branch_id ?? null,
         assign_to ?? null,
         check_in ?? null,
@@ -419,6 +395,7 @@ export const updateBooking = async (req, res) => {
         payment_status ?? null,
         internal_notes ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -435,11 +412,7 @@ export const updateBooking = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -454,8 +427,8 @@ export const deleteBooking = async (req, res) => {
     }
 
     const result = await pool.query(
-      `DELETE FROM bookings WHERE id = $1 RETURNING id`,
-      [id],
+      `DELETE FROM bookings WHERE id = $1 AND organization_id = $2 RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -470,18 +443,13 @@ export const deleteBooking = async (req, res) => {
       message: "Booking deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const addBookingGuest = async (req, res) => {
   const { id } = req.params;
   const {
-    organization_id,
     full_name,
     age,
     gender,
@@ -489,7 +457,8 @@ export const addBookingGuest = async (req, res) => {
     phone,
     document_type,
     document_number_encrypted,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -499,17 +468,10 @@ export const addBookingGuest = async (req, res) => {
       });
     }
 
-    if (!organization_id || !full_name) {
+    if (!full_name) {
       return res.status(400).json({
         success: false,
-        message: "organization_id and full_name are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "full_name are required.",
       });
     }
 
@@ -535,6 +497,10 @@ export const addBookingGuest = async (req, res) => {
       });
     }
 
+    if (document_number_encrypted != null && typeof document_number_encrypted !== "string") {
+      return res.status(400).json({ success: false, message: "Guest document number must be a string." });
+    }
+
     const result = await pool.query(
       `INSERT INTO booking_guests
        (organization_id, booking_id, full_name, age, gender, guest_type, phone, document_type, document_number_encrypted)
@@ -549,36 +515,31 @@ export const addBookingGuest = async (req, res) => {
         gType,
         phone || null,
         document_type || null,
-        document_number_encrypted || null,
+        document_number_encrypted ? encrypt_data(document_number_encrypted) : null,
       ],
     );
 
     return res.status(201).json({
       success: true,
       message: "Booking guest added successfully.",
-      data: result.rows[0],
+      data: { ...result.rows[0], document_number_encrypted: null },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const cancelBooking = async (req, res) => {
   const { id } = req.params;
   const {
-    organization_id,
-    cancelled_by,
     reason,
     cancellation_charge,
     refund_amount,
     status,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
-  const cancellerId = cancelled_by || req.user?.id;
+  const cancellerId = req.user.id;
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -589,7 +550,6 @@ export const cancelBooking = async (req, res) => {
     }
 
     if (
-      !organization_id ||
       !cancellerId ||
       cancellation_charge === undefined ||
       refund_amount === undefined
@@ -597,14 +557,7 @@ export const cancelBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, cancelled_by, cancellation_charge, and refund_amount are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "cancelled_by, cancellation_charge, and refund_amount are required.",
       });
     }
 
@@ -627,6 +580,17 @@ export const cancelBooking = async (req, res) => {
     try {
       await client.query("BEGIN");
 
+      const booking = await client.query(
+        `UPDATE bookings SET booking_status = 'cancelled', updated_at = NOW()
+         WHERE id = $1 AND organization_id = $2 AND booking_status <> 'cancelled'
+         RETURNING id`,
+        [id, organization_id],
+      );
+      if (!booking.rowCount) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ success: false, message: "Booking is unavailable or already cancelled." });
+      }
+
       const cancellationResult = await client.query(
         `INSERT INTO booking_cancellations
          (organization_id, booking_id, cancelled_by, reason, cancellation_charge, refund_amount, status)
@@ -643,11 +607,6 @@ export const cancelBooking = async (req, res) => {
         ],
       );
 
-      await client.query(
-        `UPDATE bookings SET booking_status = 'cancelled', updated_at = NOW() WHERE id = $1`,
-        [id],
-      );
-
       await client.query("COMMIT");
 
       return res.status(201).json({
@@ -662,10 +621,6 @@ export const cancelBooking = async (req, res) => {
       client.release();
     }
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

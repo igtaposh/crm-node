@@ -6,14 +6,14 @@ import {
   updateCustomer,
   deleteCustomer,
 } from "../../controllers/crm/customerController.js";
-import { userRouteProtector } from "../../middlewares/userRouteProtector.js";
+import { require_permission, userRouteProtector } from "../../middlewares/userRouteProtector.js";
 
 const router = Router();
 
-router.post("/", userRouteProtector, createCustomer);
-router.get("/", userRouteProtector, getAllCustomers);
-router.get("/:id", userRouteProtector, getCustomerById);
-router.put("/:id", userRouteProtector, updateCustomer);
-router.delete("/:id", userRouteProtector, deleteCustomer);
+router.post("/", userRouteProtector, require_permission("crm", "create"), createCustomer);
+router.get("/", userRouteProtector, require_permission("crm", "read"), getAllCustomers);
+router.get("/:id", userRouteProtector, require_permission("crm", "read"), getCustomerById);
+router.put("/:id", userRouteProtector, require_permission("crm", "update"), updateCustomer);
+router.delete("/:id", userRouteProtector, require_permission("crm", "delete"), deleteCustomer);
 
 export default router;

@@ -7,15 +7,15 @@ import {
   deleteLead,
   addLeadActivity,
 } from "../../controllers/crm/leadController.js";
-import { userRouteProtector } from "../../middlewares/userRouteProtector.js";
+import { require_permission, userRouteProtector } from "../../middlewares/userRouteProtector.js";
 
 const router = Router();
 
-router.post("/", userRouteProtector, createLead);
-router.get("/", userRouteProtector, getAllLeads);
-router.get("/:id", userRouteProtector, getLeadById);
-router.put("/:id", userRouteProtector, updateLead);
-router.delete("/:id", userRouteProtector, deleteLead);
-router.post("/:id/activities", userRouteProtector, addLeadActivity);
+router.post("/", userRouteProtector, require_permission("crm", "create"), createLead);
+router.get("/", userRouteProtector, require_permission("crm", "read"), getAllLeads);
+router.get("/:id", userRouteProtector, require_permission("crm", "read"), getLeadById);
+router.put("/:id", userRouteProtector, require_permission("crm", "update"), updateLead);
+router.delete("/:id", userRouteProtector, require_permission("crm", "delete"), deleteLead);
+router.post("/:id/activities", userRouteProtector, require_permission("crm", "create"), addLeadActivity);
 
 export default router;

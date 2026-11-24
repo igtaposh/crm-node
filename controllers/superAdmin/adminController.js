@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import { sign_session } from "../../utils/session.js";
 import bcrypt from "bcryptjs";
 import { pool } from "../../config/db.js";
 
@@ -13,7 +13,7 @@ export const admin_login = async (req, res) => {
       });
     }
 
-    if (typeof password !== "string" || !password) {
+    if (typeof password !== "string" || !password || Buffer.byteLength(password, "utf8") > 72) {
       return res.status(400).json({
         success: false,
         message: "Invalid password.",
@@ -41,12 +41,13 @@ export const admin_login = async (req, res) => {
     const result = await pool.query(
       `SELECT id, user_name, email, password_hash
        FROM super_admins
-       WHERE email = $1 OR user_name = $2
-       LIMIT 1`,
+       WHERE ($1::text IS NULL OR LOWER(email) = LOWER($1))
+         AND ($2::text IS NULL OR user_name = $2)
+       LIMIT 2`,
       [email || null, user_name || null],
     );
 
-    if (result.rowCount === 0) {
+    if (result.rowCount !== 1) {
       return res.status(401).json({
         success: false,
         message: "Invalid credentials.",
@@ -64,9 +65,8 @@ export const admin_login = async (req, res) => {
       });
     }
 
-    const token = jwt.sign({ admin: admin }, process.env.JWT_SECRET, {
-      expiresIn: "1d",
-    });
+    await pool.query("UPDATE super_admins SET last_login_at = NOW() WHERE id = $1", [admin.id]);
+    const token = sign_session("admin", admin);
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -85,7 +85,6 @@ export const admin_login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Admin login error:", error);
 
     return res.status(500).json({
       success: false,

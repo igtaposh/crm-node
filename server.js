@@ -1,7 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 
-import dotenv from "dotenv";
 import accountingPeriodRouter from "./routes/accounting/accountingPeriodRoutes.js";
 import chartOfAccountsRouter from "./routes/accounting/chartOfAccountsRoutes.js";
 import journalEntryRouter from "./routes/accounting/journalEntryRoutes.js";
@@ -34,7 +33,6 @@ import notificationRouter from "./routes/system/notificationRoutes.js";
 import { initializeDatabase, pool } from "./config/db.js";
 
 const app = express();
-dotenv.config();
 
 app.use(express.json());
 app.use(cookieParser());
@@ -69,16 +67,40 @@ app.use("/api/destinations", destinationRouter);
 app.use("/api/tour-packages", tourPackageRouter);
 app.use("/api/notifications", notificationRouter);
 
+app.use((req, res) => {
+  return res.status(404).json({ success: false, message: "Route not found." });
+});
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  const status = error.type === "entity.parse.failed" ? 400 : error.status === 413 ? 413 : 500;
+  const message = status === 400 ? "Invalid JSON." : status === 413 ? "Request body is too large." : "Internal server error.";
+  if (status === 500) console.error("Request failed.", error.code || error.name);
+  return res.status(status).json({ success: false, message });
+});
+
 try {
-  app.listen(process.env.PORT, async () => {
-    console.log(`Server listening on port ${process.env.PORT}`);
-    await initializeDatabase();
+  const salt_rounds = Number(process.env.SALT_ROUNDS);
+  if (
+    !process.env.JWT_SECRET || Buffer.byteLength(process.env.JWT_SECRET) < 32 ||
+    !/^[0-9a-f]{64}$/i.test(process.env.ENCRYPTION_SECRET_KEY || "") ||
+    !Number.isInteger(salt_rounds) || salt_rounds < 10 || salt_rounds > 15
+  ) {
+    throw new Error("Configure JWT_SECRET (32 bytes minimum), ENCRYPTION_SECRET_KEY (64 hex characters), and SALT_ROUNDS (10–15).");
+  }
+
+  const port = Number(process.env.PORT || 3000);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT.");
+  await initializeDatabase();
+
+  const server = app.listen(port, process.env.HOST || "0.0.0.0", () => console.log(`Server listening on port ${port}`));
+  server.on("error", async (error) => {
+    console.error("Server could not listen.", error.code);
+    await pool.end();
+    process.exitCode = 1;
   });
 } catch (error) {
-  console.error(
-    "Failed to initialize the database or start the server:",
-    error,
-  );
+  console.error("Server startup failed.", error.code || error.message);
   await pool.end();
   process.exitCode = 1;
 }

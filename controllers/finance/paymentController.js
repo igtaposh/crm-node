@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -8,7 +8,6 @@ const TRANSACTION_STATUSES = ["pending", "completed", "failed", "reversed"];
 
 export const createPayment = async (req, res) => {
   const {
-    organization_id,
     customer_id,
     booking_id,
     receipt_number,
@@ -19,14 +18,13 @@ export const createPayment = async (req, res) => {
     transaction_reference,
     payment_type,
     status,
-    received_by,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
-  const receiverId = received_by || req.user?.id;
+  const receiverId = req.user.id;
 
   try {
     if (
-      !organization_id ||
       !customer_id ||
       !receipt_number ||
       !payment_date ||
@@ -37,14 +35,7 @@ export const createPayment = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "organization_id, customer_id, receipt_number, payment_date, amount, payment_method, and payment_type are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+          "customer_id, receipt_number, payment_date, amount, payment_method, and payment_type are required.",
       });
     }
 
@@ -125,30 +116,19 @@ export const createPayment = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllPayments = async (req, res) => {
-  const { organization_id, customer_id, booking_id, status } = req.query;
+  const { customer_id, booking_id, status } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM payments WHERE 1=1`;
     const params = [];
 
-    if (organization_id) {
-      if (!UUID_REGEX.test(organization_id)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid organization ID.",
-        });
-      }
-      params.push(organization_id);
-      query += ` AND organization_id = $${params.length}`;
-    }
+    params.push(organization_id);
+    query += ` AND organization_id = $1`;
 
     if (customer_id) {
       if (!UUID_REGEX.test(customer_id)) {
@@ -186,11 +166,7 @@ export const getAllPayments = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -205,8 +181,8 @@ export const getPaymentById = async (req, res) => {
     }
 
     const paymentResult = await pool.query(
-      `SELECT * FROM payments WHERE id = $1`,
-      [id],
+      `SELECT * FROM payments WHERE id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     if (paymentResult.rows.length === 0) {
@@ -217,8 +193,8 @@ export const getPaymentById = async (req, res) => {
     }
 
     const allocationsResult = await pool.query(
-      `SELECT * FROM payment_allocations WHERE payment_id = $1`,
-      [id],
+      `SELECT * FROM payment_allocations WHERE payment_id = $1 AND organization_id = $2`,
+      [id, req.user.organization_id],
     );
 
     return res.status(200).json({
@@ -230,17 +206,13 @@ export const getPaymentById = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const updatePayment = async (req, res) => {
   const { id } = req.params;
-  const { status, transaction_reference } = req.body;
+  const { status, transaction_reference } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -261,9 +233,9 @@ export const updatePayment = async (req, res) => {
       `UPDATE payments
        SET status = COALESCE($1, status),
            transaction_reference = COALESCE($2, transaction_reference)
-       WHERE id = $3
+       WHERE id = $3 AND organization_id = $4
        RETURNING *`,
-      [status ?? null, transaction_reference ?? null, id],
+      [status ?? null, transaction_reference ?? null, id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -279,17 +251,14 @@ export const updatePayment = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const allocatePayment = async (req, res) => {
   const { id } = req.params;
-  const { organization_id, allocation_amount } = req.body;
+  const { allocation_amount } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -299,44 +268,63 @@ export const allocatePayment = async (req, res) => {
       });
     }
 
-    if (!organization_id || allocation_amount === undefined) {
+    if (allocation_amount === undefined) {
       return res.status(400).json({
         success: false,
-        message: "organization_id and allocation_amount are required.",
+        message: "allocation_amount are required.",
       });
     }
 
-    if (!UUID_REGEX.test(organization_id)) {
+    if (!/^\d+(?:\.\d{1,2})?$/.test(String(allocation_amount)) || Number(allocation_amount) <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Invalid organization ID.",
+        message: "allocation_amount must be a positive amount with up to two decimal places.",
       });
     }
 
-    if (allocation_amount < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "allocation_amount must be non-negative.",
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const payment = await client.query(
+        "SELECT id FROM payments WHERE organization_id = $1 AND id = $2 FOR UPDATE",
+        [organization_id, id],
+      );
+      if (!payment.rowCount) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ success: false, message: "Payment not found." });
+      }
+
+      const result = await client.query(
+        `INSERT INTO payment_allocations (organization_id, payment_id, allocation_amount)
+         SELECT $1, $2, $3
+         FROM payments p
+         WHERE p.id = $2 AND p.organization_id = $1
+           AND $3::numeric <= p.amount - COALESCE((
+             SELECT SUM(allocation_amount) FROM payment_allocations
+             WHERE organization_id = $1 AND payment_id = $2
+           ), 0)
+         RETURNING *`,
+        [organization_id, id, allocation_amount],
+      );
+
+      if (!result.rowCount) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ success: false, message: "Allocation exceeds the available balance or the supplier does not match." });
+      }
+      await client.query("COMMIT");
+
+      return res.status(201).json({
+        success: true,
+        message: "Payment allocation recorded successfully.",
+        data: result.rows[0],
       });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const result = await pool.query(
-      `INSERT INTO payment_allocations (organization_id, payment_id, allocation_amount)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [organization_id, id, allocation_amount],
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: "Payment allocation recorded successfully.",
-      data: result.rows[0],
-    });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };

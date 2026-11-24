@@ -1,11 +1,16 @@
 import { Resend } from "resend";
 
 export const sent_otp_for_email_verify = async (user, otp, organization) => {
-  console.log(user, otp, organization);
+  const escape_html = (value) => value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+  const user_name = escape_html(user.name);
+  const organization_name = escape_html(organization.name);
   const resend = new Resend(process.env.RESEND_API_KEY);
   const year = new Date().getFullYear();
-  const email = await resend.emails.send({
-    from: "verify@resend.dev",
+  const { error } = await resend.emails.send({
+    from: process.env.OTP_EMAIL_FROM || "verify@resend.dev",
     to: [user.email],
     subject: "Your  Account Verification Code (OTP)",
     html: `<!DOCTYPE html>
@@ -30,7 +35,7 @@ export const sent_otp_for_email_verify = async (user, otp, organization) => {
           <tr>
             <td align="center" style="background-color:#123d31; padding:30px 20px;">
               <h1 style="margin:0; color:#ffffff; font-size:25px; font-weight:700;">
-                ${organization.name}
+                ${organization_name}
               </h1>
               <p style="margin:8px 0 0; color:#c9ded5; font-size:13px;">
                 Welcome to the family!
@@ -43,11 +48,11 @@ export const sent_otp_for_email_verify = async (user, otp, organization) => {
             <td style="padding:35px 30px 20px; color:#333333;">
 
               <h2 style="margin:0 0 15px; font-size:22px; color:#123d31;">
-                Hello ${user.name},
+                Hello ${user_name},
               </h2>
 
               <p style="font-size:15px; line-height:1.7; color:#555555; margin:0 0 18px;">
-                Thank you for choosing <strong>${organization.name}</strong>.
+                Thank you for choosing <strong>${organization_name}</strong>.
                 We're excited to have you as part of our growing family!
               </p>
 
@@ -100,7 +105,7 @@ export const sent_otp_for_email_verify = async (user, otp, organization) => {
 
               <p style="margin:18px 0 0; font-size:14px; color:#333333; line-height:1.7;">
                 Warm regards,<br />
-                <strong style="color:#123d31;">The ${organization.name} Team</strong>
+                <strong style="color:#123d31;">The ${organization_name} Team</strong>
               </p>
 
             </td>
@@ -112,7 +117,7 @@ export const sent_otp_for_email_verify = async (user, otp, organization) => {
               style="background-color:#f8faf9; padding:20px; border-top:1px solid #eeeeee;">
 
               <p style="margin:0 0 7px; font-size:12px; color:#777777;">
-                © ${year} ${organization.name}. All rights reserved.
+                © ${year} ${organization_name}. All rights reserved.
               </p>
 
               <p style="margin:0; font-size:11px; color:#999999;">
@@ -131,5 +136,5 @@ export const sent_otp_for_email_verify = async (user, otp, organization) => {
    </body>
    </html>`,
   });
-  console.log(email);
+  if (error) throw new Error("Could not send verification email.");
 };

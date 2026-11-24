@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -8,7 +8,6 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
 export const createCustomer = async (req, res) => {
   const {
-    organization_id,
     customer_code,
     customer_type,
     name,
@@ -23,20 +22,14 @@ export const createCustomer = async (req, res) => {
     country,
     source,
     notes,
-  } = req.body;
+  } = req.body || {};
+  const { organization_id } = req.user;
 
   try {
-    if (!organization_id || !name) {
+    if (!name) {
       return res.status(400).json({
         success: false,
-        message: "organization_id and name are required.",
-      });
-    }
-
-    if (!UUID_REGEX.test(organization_id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
+        message: "name are required.",
       });
     }
 
@@ -120,16 +113,12 @@ export const createCustomer = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
 export const getAllCustomers = async (req, res) => {
-  const { organization_id } = req.query;
+  const { organization_id } = req.user;
   try {
     let query = `SELECT * FROM customers WHERE deleted_at IS NULL`;
     const params = [];
@@ -154,11 +143,7 @@ export const getAllCustomers = async (req, res) => {
       data: result.rows,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -173,8 +158,8 @@ export const getCustomerById = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT * FROM customers WHERE id = $1 AND deleted_at IS NULL`,
-      [id],
+      `SELECT * FROM customers WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -190,11 +175,7 @@ export const getCustomerById = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -215,7 +196,7 @@ export const updateCustomer = async (req, res) => {
     country,
     source,
     notes,
-  } = req.body;
+  } = req.body || {};
 
   try {
     if (!UUID_REGEX.test(id)) {
@@ -226,8 +207,8 @@ export const updateCustomer = async (req, res) => {
     }
 
     const currentResult = await pool.query(
-      `SELECT * FROM customers WHERE id = $1 AND deleted_at IS NULL`,
-      [id],
+      `SELECT * FROM customers WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL`,
+      [id, req.user.organization_id],
     );
 
     if (currentResult.rows.length === 0) {
@@ -237,7 +218,6 @@ export const updateCustomer = async (req, res) => {
       });
     }
 
-    const current = currentResult.rows[0];
 
     if (
       customer_type &&
@@ -294,9 +274,8 @@ export const updateCustomer = async (req, res) => {
            source = COALESCE($13, source),
            notes = COALESCE($14, notes),
            updated_at = NOW()
-       WHERE id = $15 AND deleted_at IS NULL
-       RETURNING *`,
-      [
+       WHERE id = $15 AND organization_id = $16 AND deleted_at IS NULL
+       RETURNING *`, [
         customer_code ?? null,
         customer_type ?? null,
         name ?? null,
@@ -312,6 +291,7 @@ export const updateCustomer = async (req, res) => {
         source ?? null,
         notes ?? null,
         id,
+        req.user.organization_id,
       ],
     );
 
@@ -321,11 +301,7 @@ export const updateCustomer = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
 
@@ -340,8 +316,8 @@ export const deleteCustomer = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE customers SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
-      [id],
+      `UPDATE customers SET deleted_at = NOW() WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL RETURNING id`,
+      [id, req.user.organization_id],
     );
 
     if (result.rows.length === 0) {
@@ -356,10 +332,6 @@ export const deleteCustomer = async (req, res) => {
       message: "Customer deleted successfully.",
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message || error,
-    });
+    return send_database_error(res, error);
   }
 };
