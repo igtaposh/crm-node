@@ -18,6 +18,7 @@ export const send_admin_password_reset_otp = async (req, res) => {
         message: "Please enter a valid email.",
       });
     }
+    z;
     const admin = await pool.query(
       `SELECT id FROM super_admins WHERE email = $1`,
       [email],

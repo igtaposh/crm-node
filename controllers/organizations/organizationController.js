@@ -134,7 +134,7 @@ export const get_all_organizations = async (req, res) => {
 };
 
 export const accept_organization_update = async (req, res) => {
-  const { request_id } = req.params;
+  const request_id = req.params.id;
 
   try {
     if (
@@ -241,7 +241,7 @@ export const accept_organization_update = async (req, res) => {
 };
 
 export const update_organization_status = async (req, res) => {
-  const { organizatin_id } = req.params;
+  const organizatin_id = req.params.id;
   const { status } = req.body;
   try {
     if (
@@ -272,6 +272,10 @@ export const update_organization_status = async (req, res) => {
         message: "Status updatation failed please try again later.",
       });
     }
+    await pool.query(
+      `UPDATE users SET status = $1 WHERE organization_id = $2 AND status != $3 RETURNING id`,
+      [status, organizatin_id, status],
+    );
     return res.status(200).json({
       success: true,
       message: "Organization status updated successfully.",
@@ -340,6 +344,12 @@ export const request_organization_update = async (req, res) => {
   } = req.body;
 
   try {
+    if (req.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update branch status.",
+      });
+    }
     const requestedData = {};
 
     if (

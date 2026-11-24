@@ -18,6 +18,12 @@ export const create_user = async (req, res) => {
   const organization_id = req.user.organization_id;
 
   try {
+    if (req.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update branch status.",
+      });
+    }
     if (!organization_id || !name || !email || !password_hash || !role_id) {
       return res.status(400).json({
         success: false,

@@ -30,6 +30,7 @@ import documentRouter from "./routes/system/documentRoutes.js";
 import cancellationPolicyRouter from "./routes/tours/cancellationPolicyRoutes.js";
 import destinationRouter from "./routes/tours/destinationRoutes.js";
 import tourPackageRouter from "./routes/tours/tourPackageRoutes.js";
+import notificationRouter from "./routes/system/notificationRoutes.js";
 import { initializeDatabase, pool } from "./config/db.js";
 
 const app = express();
@@ -66,6 +67,7 @@ app.use("/api/documents", documentRouter);
 app.use("/api/cancellation-policies", cancellationPolicyRouter);
 app.use("/api/destinations", destinationRouter);
 app.use("/api/tour-packages", tourPackageRouter);
+app.use("/api/notifications", notificationRouter);
 
 try {
   app.listen(process.env.PORT, async () => {

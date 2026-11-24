@@ -1,24 +1,22 @@
 import { pool } from "../../config/db.js";
 
 export const create_roles = async (req, res) => {
-  const { organization_id, name, description } = req.body;
+  const { name, description } = req.body;
+  const { organization_id } = req.user;
   try {
+    if (req.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to update branch status.",
+      });
+    }
     if (!organization_id) {
       return res.status(400).json({
         success: false,
         message: "Organization ID is required.",
       });
     }
-    if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        organization_id,
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization ID.",
-      });
-    }
+
     if (!name) {
       return res.status(400).json({
         success: false,
@@ -49,7 +47,41 @@ export const create_roles = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error.",
-      error,
+    });
+  }
+};
+
+export const delete_roles = async (req, res) => {
+  const { role_id } = req.params;
+  try {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        role_id,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role ID.",
+      });
+    }
+    const deleted_roles = await pool.query(
+      `DELETE FROM roles WHERE id = $1 RETURING id`,
+      [role_id],
+    );
+    if (deleted_roles.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "There is a error while deleting role.",
+      });
+    }
+    return res.status(200).json({
+      success: false,
+      message: "Role deleted successfully.",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error.",
     });
   }
 };

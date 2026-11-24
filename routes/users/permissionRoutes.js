@@ -1,12 +1,15 @@
 import { Router } from "express";
-import { create_premissions } from "../../controllers/users/permissionController.js";
+import {
+  create_premissions,
+  delete_permission,
+  get_permission_by_id,
+} from "../../controllers/users/permissionController.js";
 import { userRouteProtector } from "../../middlewares/userRouteProtector.js";
 
 const router = Router();
 
 router.post("/", userRouteProtector, create_premissions);
-// router.post("/sent-otp", sent_email_verification_otp);
-// router.post("/verify-otp", verify_user_email);
-// router.post("/login", user_login);
+router.get("/:id", userRouteProtector, get_permission_by_id);
+router.delete("/:id", userRouteProtector, delete_permission);
 
 export default router;
