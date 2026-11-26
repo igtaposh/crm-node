@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 import bcrypt from "bcryptjs";
 import { issue_account_challenge, verify_account_challenge } from "../../utils/account_challenge.js";
 import { sent_otp_for_email_verify } from "../../utils/sent_otp_for_email_verify.js";
@@ -158,6 +158,30 @@ const create_account = async (req, res, is_admin) => {
       return res.status(409).json({ success: false, message: "Email is already in use." });
     }
     return res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
+export const list_users = async (req, res) => {
+  if (req.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Permission denied." });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.name, u.email, u.status, u.designation, b.branch_name,
+              COALESCE(string_agg(DISTINCT r.name, ', ' ORDER BY r.name), '') AS roles
+       FROM users u
+       LEFT JOIN branches b ON b.id = u.branch_id AND b.organization_id = u.organization_id
+       LEFT JOIN user_roles ur ON ur.user_id = u.id
+       LEFT JOIN roles r ON r.id = ur.role_id AND r.organization_id = u.organization_id
+       WHERE u.organization_id = $1
+       GROUP BY u.id, b.branch_name
+       ORDER BY u.name, u.id`,
+      [req.user.organization_id],
+    );
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return send_database_error(res, error);
   }
 };
 

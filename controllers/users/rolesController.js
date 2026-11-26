@@ -1,4 +1,4 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
 export const create_roles = async (req, res) => {
   const { name, description } = req.body;
@@ -93,5 +93,94 @@ export const delete_roles = async (req, res) => {
       success: false,
       message: "Internal server error.",
     });
+  }
+};
+
+export const list_roles = async (req, res) => {
+  if (req.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Permission denied." });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, description FROM roles WHERE organization_id = $1 ORDER BY name`,
+      [req.user.organization_id],
+    );
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return send_database_error(res, error);
+  }
+};
+
+export const get_role_permissions = async (req, res) => {
+  if (req.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Permission denied." });
+  }
+  try {
+    const role = await pool.query(
+      "SELECT id FROM roles WHERE id = $1 AND organization_id = $2",
+      [req.params.role_id, req.user.organization_id],
+    );
+    if (!role.rowCount) {
+      return res.status(404).json({ success: false, message: "Role not found." });
+    }
+    const { rows } = await pool.query(
+      `SELECT p.id, p.module, p.action, p.description,
+              EXISTS (SELECT 1 FROM role_permissions rp
+                      WHERE rp.role_id = $1 AND rp.permission_id = p.id) AS enabled
+       FROM permissions p ORDER BY p.module, p.action, p.id`,
+      [req.params.role_id],
+    );
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return send_database_error(res, error);
+  }
+};
+
+export const set_role_permission = async (req, res) => {
+  if (req.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Permission denied." });
+  }
+  const { role_id, permission_id } = req.params;
+  const { enabled } = req.body || {};
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({ success: false, message: "Enabled must be true or false." });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const role = await client.query(
+      `SELECT id FROM roles WHERE id = $1 AND organization_id = $2 AND name <> 'admin' FOR UPDATE`,
+      [role_id, req.user.organization_id],
+    );
+    if (!role.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Editable role not found." });
+    }
+    if (enabled) {
+      const permission = await client.query("SELECT id FROM permissions WHERE id = $1", [permission_id]);
+      if (!permission.rowCount) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ success: false, message: "Permission not found." });
+      }
+      await client.query(
+        `INSERT INTO role_permissions (role_id, permission_id)
+         SELECT $1, $2 WHERE NOT EXISTS (
+           SELECT 1 FROM role_permissions WHERE role_id = $1 AND permission_id = $2
+         )`,
+        [role_id, permission_id],
+      );
+    } else {
+      await client.query(
+        "DELETE FROM role_permissions WHERE role_id = $1 AND permission_id = $2",
+        [role_id, permission_id],
+      );
+    }
+    await client.query("COMMIT");
+    return res.json({ success: true });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    return send_database_error(res, error);
+  } finally {
+    client.release();
   }
 };

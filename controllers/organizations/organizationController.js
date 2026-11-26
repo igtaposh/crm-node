@@ -510,3 +510,14 @@ export const request_organization_update = async (req, res) => {
     });
   }
 };
+
+export const list_organization_update_requests = async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT r.id, o.name AS organization_name, r.requested_data::text AS changes, r.created_at
+     FROM organization_update_requests r
+     JOIN organizations o ON o.id = r.organization_id
+     WHERE r.status = 'pending'
+     ORDER BY r.created_at, r.id`,
+  );
+  return res.json({ success: true, data: rows });
+};

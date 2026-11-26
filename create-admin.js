@@ -24,7 +24,7 @@ const createAdmin = async () => {
     const hashed_password = await bcrypt.hash(password, salt_rounds);
     const result = await pool.query(
       `INSERT INTO super_admins (user_name, email, password_hash)
-       SELECT $1, $2, $3
+       SELECT $1::VARCHAR, $2::VARCHAR, $3::VARCHAR
        WHERE NOT EXISTS (SELECT 1 FROM super_admins WHERE LOWER(email) = $2)
        ON CONFLICT DO NOTHING`,
       [user_name, email, hashed_password],

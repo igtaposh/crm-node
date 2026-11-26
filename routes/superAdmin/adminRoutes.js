@@ -21,6 +21,10 @@ import {
 const router = express.Router();
 
 router.post("/login", loginLimiter(), admin_login);
+router.get("/session", adminRouteProtector, (req, res) => {
+  res.set("Cache-Control", "no-store");
+  return res.json({ success: true, admin: req.admin });
+});
 router.post("/logout", adminRouteProtector, admin_logout);
 
 router.patch(

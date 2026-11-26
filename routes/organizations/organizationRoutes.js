@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  list_organization_update_requests,
   accept_organization_update,
   create_organization,
   get_all_organizations,
@@ -13,6 +14,7 @@ const router = Router();
 
 router.post("/", adminRouteProtector, create_organization);
 router.get("/", adminRouteProtector, get_all_organizations);
+router.get("/update/requests", adminRouteProtector, list_organization_update_requests);
 router.patch(
   "/update/request/accept{/:id}",
   adminRouteProtector,

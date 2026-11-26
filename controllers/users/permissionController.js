@@ -127,3 +127,10 @@ export const delete_permission = async (req, res) => {
     });
   }
 };
+
+export const list_permissions = async (_req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, module, action, description FROM permissions ORDER BY module, action, id",
+  );
+  return res.json({ success: true, data: rows });
+};

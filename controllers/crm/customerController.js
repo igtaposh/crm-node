@@ -259,20 +259,20 @@ export const updateCustomer = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE customers
-       SET customer_code = COALESCE($1, customer_code),
+       SET customer_code = CASE WHEN $1 = '' THEN NULL ELSE COALESCE($1, customer_code) END,
            customer_type = COALESCE($2, customer_type),
            name = COALESCE($3, name),
-           company_name = COALESCE($4, company_name),
-           email = COALESCE($5, email),
-           phone = COALESCE($6, phone),
-           alternate_phone = COALESCE($7, alternate_phone),
-           gstin = COALESCE($8, gstin),
-           address = COALESCE($9, address),
-           city = COALESCE($10, city),
-           state = COALESCE($11, state),
-           country = COALESCE($12, country),
-           source = COALESCE($13, source),
-           notes = COALESCE($14, notes),
+           company_name = CASE WHEN $4 = '' THEN NULL ELSE COALESCE($4, company_name) END,
+           email = CASE WHEN $5 = '' THEN NULL ELSE COALESCE($5, email) END,
+           phone = CASE WHEN $6 = '' THEN NULL ELSE COALESCE($6, phone) END,
+           alternate_phone = CASE WHEN $7 = '' THEN NULL ELSE COALESCE($7, alternate_phone) END,
+           gstin = CASE WHEN $8 = '' THEN NULL ELSE COALESCE($8, gstin) END,
+           address = CASE WHEN $9 = '' THEN NULL ELSE COALESCE($9, address) END,
+           city = CASE WHEN $10 = '' THEN NULL ELSE COALESCE($10, city) END,
+           state = CASE WHEN $11 = '' THEN NULL ELSE COALESCE($11, state) END,
+           country = CASE WHEN $12 = '' THEN NULL ELSE COALESCE($12, country) END,
+           source = CASE WHEN $13 = '' THEN NULL ELSE COALESCE($13, source) END,
+           notes = CASE WHEN $14 = '' THEN NULL ELSE COALESCE($14, notes) END,
            updated_at = NOW()
        WHERE id = $15 AND organization_id = $16 AND deleted_at IS NULL
        RETURNING *`, [

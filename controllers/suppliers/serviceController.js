@@ -473,3 +473,18 @@ export const addServiceVoucher = async (req, res) => {
     return send_database_error(res, error);
   }
 };
+
+export const list_service_vouchers = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT v.*, s.service_name FROM service_voucher v
+       JOIN booking_services s ON s.id = v.booking_service_id
+       WHERE s.organization_id = $1
+       ORDER BY v.pickup_time NULLS LAST, v.id`,
+      [req.user.organization_id],
+    );
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return send_database_error(res, error);
+  }
+};
