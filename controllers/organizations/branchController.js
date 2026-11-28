@@ -131,7 +131,7 @@ export const get_all_branches = async (req, res) => {
     if (req.role !== "admin") {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to update branch status.",
+        message: "You are not authorized to list branches.",
       });
     }
     const result = await pool.query(
@@ -140,15 +140,9 @@ export const get_all_branches = async (req, res) => {
       `,
       [organization_id],
     );
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No branch found.",
-      });
-    }
     return res.status(200).json({
       success: true,
-      message: "ALL branches fethed successfully.",
+      message: "Branches fetched successfully.",
       data: result.rows,
     });
   } catch (error) {

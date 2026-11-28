@@ -34,6 +34,7 @@ const protect_user = (allow_unverified) => async (req, res, next) => {
      JOIN roles r ON r.id = ur.role_id AND r.organization_id = $2
      LEFT JOIN role_permissions rp ON rp.role_id = r.id
      LEFT JOIN permissions p ON p.id = rp.permission_id
+       AND (p.organization_id IS NULL OR p.organization_id = $2)
      WHERE ur.user_id = $1`,
     [user.id, user.organization_id],
   );

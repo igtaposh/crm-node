@@ -127,8 +127,10 @@ export const get_role_permissions = async (req, res) => {
       `SELECT p.id, p.module, p.action, p.description,
               EXISTS (SELECT 1 FROM role_permissions rp
                       WHERE rp.role_id = $1 AND rp.permission_id = p.id) AS enabled
-       FROM permissions p ORDER BY p.module, p.action, p.id`,
-      [req.params.role_id],
+       FROM permissions p
+       WHERE p.organization_id IS NULL OR p.organization_id = $2
+       ORDER BY p.module, p.action, p.id`,
+      [req.params.role_id, req.user.organization_id],
     );
     return res.json({ success: true, data: rows });
   } catch (error) {
@@ -157,7 +159,10 @@ export const set_role_permission = async (req, res) => {
       return res.status(404).json({ success: false, message: "Editable role not found." });
     }
     if (enabled) {
-      const permission = await client.query("SELECT id FROM permissions WHERE id = $1", [permission_id]);
+      const permission = await client.query(
+        "SELECT id FROM permissions WHERE id = $1 AND (organization_id IS NULL OR organization_id = $2)",
+        [permission_id, req.user.organization_id],
+      );
       if (!permission.rowCount) {
         await client.query("ROLLBACK");
         return res.status(404).json({ success: false, message: "Permission not found." });

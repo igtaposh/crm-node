@@ -15,7 +15,10 @@ import {
   send_password_reset_otp,
   verify_password_reset_otp,
 } from "../../controllers/users/passwordResetController.js";
-import { emailVerificationProtector, userRouteProtector } from "../../middlewares/userRouteProtector.js";
+import {
+  emailVerificationProtector,
+  userRouteProtector,
+} from "../../middlewares/userRouteProtector.js";
 import { adminRouteProtector } from "../../middlewares/adminRouteProtector.js";
 import {
   loginLimiter,
@@ -32,14 +35,14 @@ router.post("/admin", adminRouteProtector, create_admin_user);
 
 router.post(
   "/sent-otp",
-  emailVerificationProtector,
+
   sendOtpLimiter(),
   sent_email_verification_otp,
 );
 
 router.post(
   "/verify-otp",
-  emailVerificationProtector,
+
   verifyOtpLimiter(),
   verify_user_email,
 );
@@ -48,9 +51,13 @@ router.post("/login", loginLimiter(), user_login);
 
 router.get("/me", userRouteProtector, (req, res) => {
   res.set("Cache-Control", "no-store");
-  return res.json({ user: req.user, role: req.role, permissions: req.permissions
-    .filter(({ module, action }) => module && action)
-    .map(({ module, action }) => ({ module, action })) });
+  return res.json({
+    user: req.user,
+    role: req.role,
+    permissions: req.permissions
+      .filter(({ module, action }) => module && action)
+      .map(({ module, action }) => ({ module, action })),
+  });
 });
 
 router.post("/logout", (_req, res) => {

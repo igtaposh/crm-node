@@ -1,7 +1,7 @@
-import { pool } from "../../config/db.js";
+import { pool, send_database_error } from "../../config/db.js";
 
-export const create_premissions = async (req, res) => {
-  const { module, action, description } = req.body;
+const create_permission = async (req, res, organization_id) => {
+  const { module, action, description } = req.body || {};
   try {
     if (!module) {
       return res.status(400).json({
@@ -33,8 +33,8 @@ export const create_premissions = async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO permissions (module, action, description) VALUES ($1, $2, $3) RETURNING *`,
-      [module, action, description || null],
+      `INSERT INTO permissions (module, action, description, organization_id) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [module, action, description || null, organization_id],
     );
     return res.status(201).json({
       success: true,
@@ -42,12 +42,39 @@ export const create_premissions = async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-    });
+    return send_database_error(res, error);
   }
 };
+
+export const create_premissions = (req, res) => create_permission(req, res, null);
+
+export const create_organization_permission = (req, res) => {
+  if (req.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Permission denied." });
+  }
+  return create_permission(req, res, req.user.organization_id);
+};
+
+export const list_organization_permissions = async (req, res) => {
+  if (req.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Permission denied." });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, module, action, description,
+              CASE WHEN organization_id IS NULL THEN 'Shared' ELSE 'Organization' END AS scope
+       FROM permissions
+       WHERE organization_id IS NULL OR organization_id = $1
+       ORDER BY module, action, id`,
+      [req.user.organization_id],
+    );
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return send_database_error(res, error);
+  }
+};
+
 export const get_permission_by_id = async (req, res) => {
   const { id } = req.params;
   try {
@@ -63,8 +90,8 @@ export const get_permission_by_id = async (req, res) => {
     }
 
     const permission = await pool.query(
-      `SELECT * FROM permissions WHERE id = $1`,
-      [id],
+      `SELECT * FROM permissions WHERE id = $1 AND (organization_id IS NULL OR organization_id = $2)`,
+      [id, req.user.organization_id],
     );
     if (permission.rowCount === 0) {
       return res.status(400).json({
@@ -100,7 +127,7 @@ export const delete_permission = async (req, res) => {
     }
 
     const deleted_permission = await pool.query(
-      `DELETE FROM permissions WHERE id = $1 RETURNING id`,
+      `DELETE FROM permissions WHERE id = $1 AND organization_id IS NULL RETURNING id`,
       [id],
     );
     if (deleted_permission.rowCount === 0) {
@@ -130,7 +157,7 @@ export const delete_permission = async (req, res) => {
 
 export const list_permissions = async (_req, res) => {
   const { rows } = await pool.query(
-    "SELECT id, module, action, description FROM permissions ORDER BY module, action, id",
+    "SELECT id, module, action, description FROM permissions WHERE organization_id IS NULL ORDER BY module, action, id",
   );
   return res.json({ success: true, data: rows });
 };

@@ -282,82 +282,82 @@ app.use((req, res) => {
 // GLOBAL ERROR HANDLER
 // ==========================================
 
-app.use((error, req, res, next) => {
-  if (res.headersSent) {
-    return next(error);
-  }
+// app.use((error, req, res, next) => {
+//   if (res.headersSent) {
+//     return next(error);
+//   }
 
-  let status = error.status || error.statusCode || 500;
+//   let status = error.status || error.statusCode || 500;
 
-  if (!Number.isInteger(status) || status < 400 || status > 599) {
-    status = 500;
-  }
+//   if (!Number.isInteger(status) || status < 400 || status > 599) {
+//     status = 500;
+//   }
 
-  let message = "Internal server error.";
+//   let message = "Internal server error.";
 
-  if (error.type === "entity.parse.failed") {
-    status = 400;
-    message = "Invalid JSON.";
-  } else {
-    switch (status) {
-      case 400:
-        message = "Invalid request.";
-        break;
+//   if (error.type === "entity.parse.failed") {
+//     status = 400;
+//     message = "Invalid JSON.";
+//   } else {
+//     switch (status) {
+//       case 400:
+//         message = "Invalid request.";
+//         break;
 
-      case 401:
-        message = "Unauthorized access.";
-        break;
+//       case 401:
+//         message = "Unauthorized access.";
+//         break;
 
-      case 403:
-        message = "Access denied.";
-        break;
+//       case 403:
+//         message = "Access denied.";
+//         break;
 
-      case 404:
-        message = "Resource not found.";
-        break;
+//       case 404:
+//         message = "Resource not found.";
+//         break;
 
-      case 409:
-        message = "Resource conflict.";
-        break;
+//       case 409:
+//         message = "Resource conflict.";
+//         break;
 
-      case 413:
-        message = "Request body is too large.";
-        break;
+//       case 413:
+//         message = "Request body is too large.";
+//         break;
 
-      case 422:
-        message = "Invalid request data.";
-        break;
+//       case 422:
+//         message = "Invalid request data.";
+//         break;
 
-      case 429:
-        message = "Too many requests.";
-        break;
+//       case 429:
+//         message = "Too many requests.";
+//         break;
 
-      case 503:
-        message = "Service unavailable.";
-        break;
+//       case 503:
+//         message = "Service unavailable.";
+//         break;
 
-      default:
-        if (status < 500) {
-          message = "Request could not be processed.";
-        }
-        break;
-    }
-  }
+//       default:
+//         if (status < 500) {
+//           message = "Request could not be processed.";
+//         }
+//         break;
+//     }
+//   }
 
-  if (status >= 500) {
-    console.error("Request failed:", {
-      method: req.method,
-      code: error.code,
-      name: error.name,
-      status,
-    });
-  }
+//   if (status >= 500) {
+//     console.error("Request failed:", {
+//       method: req.method,
+//       code: error.code,
+//       name: error.name,
+//       status,
+//     });
+//   }
 
-  return res.status(status).json({
-    success: false,
-    message,
-  });
-});
+//   return res.status(status).json({
+//     success: false,
+//     message,
+//   });
+// });
 
 // ==========================================
 // GRACEFUL SHUTDOWN
